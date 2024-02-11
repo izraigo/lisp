@@ -225,13 +225,13 @@ fn eval(v: LispVal) -> LispVal {
 }
 
 fn apply(list: &Vec<LispVal>) -> Result<LispVal, String> {
-    let left = list[1].clone();
+    let left = eval(list[1].clone());
     let left = match left {
         LispVal::Number(n) => n,
         _ => return Err(format!("Left operand must be an integer {:?}", left)),
     };
 
-    let right = list[2].clone();
+    let right = eval(list[2].clone());
     let right = match right {
         LispVal::Number(n) => n,
         _ => return Err(format!("Left operand must be an integer {:?}", right)),
@@ -261,5 +261,17 @@ fn eval_test() {
     println!("Expression input: {}", e);
     let res = eval(e);
     println!("Expression input: {}", res);
-    assert_eq!(res, Number(5))
+    assert_eq!(res, Number(5));
+
+    let (_, e) = parse_expr("(- (+ 4 6 3) 3 5 2)").unwrap();
+    println!("Expression input: {}", e);
+    let res = eval(e);
+    println!("Expression input: {}", res);
+    assert_ne!(res, Number(3));
+
+    let (_, e) = parse_expr("(+ 2 (- 4 1))").unwrap();
+    println!("Expression input: {}", e);
+    let res = eval(e);
+    println!("Expression input: {}", res);
+    assert_eq!(res, Number(5));
 }
