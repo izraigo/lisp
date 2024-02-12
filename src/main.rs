@@ -225,17 +225,19 @@ fn eval(v: LispVal) -> LispVal {
 }
 
 fn apply(list: &Vec<LispVal>) -> Result<LispVal, String> {
-    let left = eval(list[1].clone());
-    let left = match left {
-        LispVal::Number(n) => n,
-        _ => return Err(format!("Left operand must be an integer {:?}", left)),
-    };
+    if let Ok(l) = apply_primitive(list) {
+        return Ok(l);
+    } else {
+        return Err("".to_string())
+    }
 
-    let right = eval(list[2].clone());
-    let right = match right {
-        LispVal::Number(n) => n,
-        _ => return Err(format!("Left operand must be an integer {:?}", right)),
-    };
+}
+
+
+
+fn apply_primitive(list: &Vec<LispVal>) -> Result<LispVal, String> {
+    let left = extract_num_value(list[1].clone()).unwrap();
+    let right = extract_num_value(list[2].clone()).unwrap();
 
     let operator = list[0].clone();
     if let Atom(s) = operator {
@@ -255,9 +257,18 @@ fn apply(list: &Vec<LispVal>) -> Result<LispVal, String> {
     }
 }
 
+fn extract_num_value(lv: LispVal) -> Result<i64, Result<LispVal, String>> {
+    let left = eval(lv);
+    match left {
+        LispVal::Number(n) => Ok(n),
+        LispVal::String(s) => Ok(s.parse().unwrap()),
+        _ => return Err(Err(format!("Left operand must be an integer {:?}", left))),
+    }
+}
+
 #[test]
 fn eval_test() {
-    let (_, e) = parse_expr("(+ 2 3)").unwrap();
+    let (_, e) = parse_expr("(+ 2 \"3\")").unwrap();
     println!("Expression input: {}", e);
     let res = eval(e);
     println!("Expression input: {}", res);
