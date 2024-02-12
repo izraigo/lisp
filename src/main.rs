@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use nom::character::complete::space1;
 use nom::multi::{many0, separated_list1};
 use nom::{
@@ -25,6 +26,20 @@ fn main() {
     stdin().read_line(&mut s).expect("Enter exprsssion");
     parse_string(&s).unwrap();
 }
+
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct Env {
+    parent: Option<Box<Env>>,
+    vars: HashMap<String, LispVal>
+}
+
+impl Env {
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
+
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum LispVal {
     Atom(String),
@@ -34,6 +49,7 @@ pub enum LispVal {
     List(Vec<LispVal>),
     DottedList(Vec<LispVal>, Box<LispVal>),
     Quote(Box<LispVal>),
+    Func { args:Vec<String>, vararg: Option<String>, body: Box<LispVal>, closure: Env}
 }
 
 impl Display for LispVal {
@@ -52,7 +68,8 @@ impl Display for LispVal {
                 let a: Vec<String> = v.into_iter().map(|i| i.to_string()).collect();
                 write!(f, "{} . {}", a.join(" "), v1.to_string())
             }
-            LispVal::Quote(q) => write!(f, "quote {}", q)
+            LispVal::Quote(q) => write!(f, "quote {}", q),
+            LispVal:: Func { .. } => write!(f, "Func {}", "")
         }        
     }    
 }
@@ -212,22 +229,31 @@ fn quoted_parser_test2() {
 }
 
 
-fn eval(v: LispVal) -> LispVal {
+fn eval(v: LispVal, env: Box<Env>) -> LispVal {
     match v {
         LispVal::Atom(_) => v,
         LispVal::String(_) => v,
         LispVal::Number(_) => v,
         LispVal::Boolean(_) => v,
         LispVal::Quote(q) => *q,
-        LispVal::List(v) => apply(&v).unwrap(),
-        LispVal::DottedList(_, _) => v
+        LispVal::List(v) => eval_list(&v, &env).unwrap(),
+        LispVal::DottedList(_, _) => v,
+        LispVal::Func { .. } => todo!()
     }
 }
 
-fn apply(list: &Vec<LispVal>) -> Result<LispVal, String> {
-    if let Ok(l) = apply_primitive(list) {
+fn eval_list(list: &Vec<LispVal>, env: &Box<Env>) -> Result<LispVal, String> {
+    if let Ok(l) = apply_primitive(list, env) {
         return Ok(l);
     } else {
+        let a = &list[0];
+        if let Atom(s) = a {
+            match s.as_str() {
+                "" => Ok(Atom("".to_string())),
+//todo
+                    _ => Err("".to_string())
+            };
+        };
         return Err("".to_string())
     }
 
@@ -235,9 +261,9 @@ fn apply(list: &Vec<LispVal>) -> Result<LispVal, String> {
 
 
 
-fn apply_primitive(list: &Vec<LispVal>) -> Result<LispVal, String> {
-    let left = extract_num_value(list[1].clone()).unwrap();
-    let right = extract_num_value(list[2].clone()).unwrap();
+fn apply_primitive(list: &Vec<LispVal>, env: &Box<Env> ) -> Result<LispVal, String> {
+    let left = extract_num_value(list[1].clone(), env.clone()).unwrap();
+    let right = extract_num_value(list[2].clone(), env.clone()).unwrap();
 
     let operator = list[0].clone();
     if let Atom(s) = operator {
@@ -257,8 +283,8 @@ fn apply_primitive(list: &Vec<LispVal>) -> Result<LispVal, String> {
     }
 }
 
-fn extract_num_value(lv: LispVal) -> Result<i64, Result<LispVal, String>> {
-    let left = eval(lv);
+fn extract_num_value(lv: LispVal, env: Box<Env>) -> Result<i64, Result<LispVal, String>> {
+    let left = eval(lv, env);
     match left {
         LispVal::Number(n) => Ok(n),
         LispVal::String(s) => Ok(s.parse().unwrap()),
@@ -268,21 +294,22 @@ fn extract_num_value(lv: LispVal) -> Result<i64, Result<LispVal, String>> {
 
 #[test]
 fn eval_test() {
+    let env = Box::from(Env::new());
     let (_, e) = parse_expr("(+ 2 \"3\")").unwrap();
     println!("Expression input: {}", e);
-    let res = eval(e);
+    let res = eval(e, env.clone());
     println!("Expression input: {}", res);
     assert_eq!(res, Number(5));
 
     let (_, e) = parse_expr("(- (+ 4 6 3) 3 5 2)").unwrap();
     println!("Expression input: {}", e);
-    let res = eval(e);
+    let res = eval(e, env.clone());
     println!("Expression input: {}", res);
     assert_ne!(res, Number(3));
 
     let (_, e) = parse_expr("(+ 2 (- 4 1))").unwrap();
     println!("Expression input: {}", e);
-    let res = eval(e);
+    let res = eval(e, env.clone());
     println!("Expression input: {}", res);
     assert_eq!(res, Number(5));
 }
