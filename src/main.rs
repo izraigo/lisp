@@ -1,3 +1,5 @@
+mod parser;
+
 use std::collections::HashMap;
 use nom::character::complete::space1;
 use nom::multi::{many0, separated_list1};
@@ -16,15 +18,30 @@ use nom::{
     bytes::complete::is_a,
     multi::many1
   };
-use std::io::stdin;
+use std::io::{stdin, Write};
 use std::fmt::{Debug, Display};
 use crate::LispVal::{Atom, Boolean, Number};
 
 fn main() {
-    println!("Hello, world!");
-    let mut s = String::new();
-    stdin().read_line(&mut s).expect("Enter exprsssion");
-    parse_string(&s).unwrap();
+    println!("Lisp in rust!");
+    let mut env = Box::from(Env::new());
+    loop {
+        let mut s = String::new();
+        print!("lisp>>> ");
+        std::io::stdout().flush();
+        stdin().read_line(&mut s).expect("Enter expression");
+
+        match parse_expr(&s) {
+            Ok((_, lisp_val)) => {
+                match eval(lisp_val, &mut env) {
+                    Ok(res) => println!("{}", res),
+                    Err(e) => println!("Error: {}", e)
+                }
+            },
+            Err(e) => println!("Error: {}", e)
+        }
+    }
+
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -59,7 +76,7 @@ impl Display for LispVal {
             LispVal::Number(n) => write!(f, "{}", n),
             LispVal::String(s) => write!(f, "\"{}\"", s),
             LispVal::Boolean(b) => write!(f, "{}", b),
-            LispVal::List(v) => 
+            LispVal::List(v) =>
             {
                 let a: Vec<String> = v.into_iter().map(|i| i.to_string()).collect();
                 write!(f, "({})", a.join(" "))
@@ -70,8 +87,8 @@ impl Display for LispVal {
             }
             LispVal::Quote(q) => write!(f, "quote {}", q),
             LispVal:: Func { .. } => write!(f, "Func {}", "")
-        }        
-    }    
+        }
+    }
 }
 
 
@@ -229,15 +246,15 @@ fn quoted_parser_test2() {
 }
 
 
-fn eval(v: LispVal, mut env: &mut Box<Env>) -> LispVal {
+fn eval(v: LispVal, mut env: &mut Box<Env>) -> Result<LispVal, String> {
     match v {
-        LispVal::Atom(_) => v,
-        LispVal::String(_) => v,
-        LispVal::Number(_) => v,
-        LispVal::Boolean(_) => v,
-        LispVal::Quote(q) => *q,
-        LispVal::List(v) => eval_list(&v, &mut env).unwrap(),
-        LispVal::DottedList(_, _) => v,
+        LispVal::Atom(var) => get_var(var, env),
+        LispVal::String(_) => Ok(v),
+        LispVal::Number(_) => Ok(v),
+        LispVal::Boolean(_) => Ok(v),
+        LispVal::Quote(q) => Ok(*q),
+        LispVal::List(v) => eval_list(&v, &mut env),
+        LispVal::DottedList(_, _) => Ok(v),
         LispVal::Func { .. } => todo!()
     }
 }
@@ -251,7 +268,7 @@ fn eval_list(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String>
             match s.as_str() {
                 "define" => define_var(list, env),
                 "set!" => set_var(list, env),
-                _ => Err("".to_string())
+                _ => get_var(s.clone(), env)
             }
         } else {
             return Err("".to_string())
@@ -287,7 +304,7 @@ fn define_var(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String
     let mut iter = list.iter();
     consume(iter.next(), "Expect define")?;
     let name = extract_str_from_atom(consume(iter.next(), "Expect variable name"))?;
-    let val = consume(iter.next(), "Expect variable value").map(|a| eval(a, env))?;
+    let val = consume(iter.next(), "Expect variable value").map(|a| eval(a, env))??;
     nothing_to_consume(iter.next())?;
     env.vars.insert(name, val.clone());
     Ok(val)
@@ -297,7 +314,7 @@ fn set_var(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String> {
     let mut iter = list.iter();
     consume(iter.next(), "Expect set!")?;
     let name = extract_str_from_atom(consume(iter.next(), "Expect variable name"))?;
-    let val = consume(iter.next(), "Expect variable value").map(|a| eval(a, env))?;
+    let val = consume(iter.next(), "Expect variable value").map(|a| eval(a, env))??;
     nothing_to_consume(iter.next())?;
     match env.vars.insert(name.clone(), val.clone()) {
         Some(_) => Err(format!("Variable is not defined {}", name)),
@@ -305,13 +322,21 @@ fn set_var(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String> {
     }
 }
 
+fn get_var(name: String, env: &mut Box<Env>) -> Result<LispVal, String> {
+    match env.vars.get(&name) {
+        Some(v) => Ok(v.clone()),
+        None => Err(format!("Variable {} is not defined", name))
+    }
+}
+
 
 
 fn apply_primitive(list: &Vec<LispVal>, env: &mut Box<Env> ) -> Result<LispVal, String> {
-    let left = extract_num_value(list[1].clone(), env)?;
-    let right = extract_num_value(list[2].clone(), env)?;
+    let mut iter = list.iter();
+    let operator = consume(iter.next(), "Expect operator")?;
+    let left = extract_num_value(consume(iter.next(), "Expect argument")?, env)?;
+    let right = extract_num_value(consume(iter.next(), "Expect argument")?, env)?;
 
-    let operator = list[0].clone();
     if let Atom(s) = operator {
         match s.as_str() {
             "+" => Ok(Number(left + right)),
@@ -330,7 +355,7 @@ fn apply_primitive(list: &Vec<LispVal>, env: &mut Box<Env> ) -> Result<LispVal, 
 }
 
 fn extract_num_value(lv: LispVal, env: &mut Box<Env>) -> Result<i64, String> {
-    let left = eval(lv, env);
+    let left = eval(lv, env)?;
     match left {
         LispVal::Number(n) => Ok(n),
         LispVal::String(s) => Ok(s.parse().unwrap()),
@@ -338,12 +363,12 @@ fn extract_num_value(lv: LispVal, env: &mut Box<Env>) -> Result<i64, String> {
     }
 }
 
-fn extract_string_value(lv: LispVal, env: &mut Box<Env>) -> Result<String, Result<LispVal, String>> {
-    let left = eval(lv, env);
+fn extract_string_value(lv: LispVal, env: &mut Box<Env>) -> Result<String, String> {
+    let left = eval(lv, env)?;
     match left {
         LispVal::Number(n) => Ok(n.to_string()),
         LispVal::String(s) => Ok(s),
-        _ => return Err(Err(format!("Left operand must be a string {:?}", left))),
+        _ => return Err(format!("Left operand must be a string {:?}", left)),
     }
 }
 
@@ -355,19 +380,19 @@ fn eval_test() {
     let mut env = Box::from(Env::new());
     let (_, e) = parse_expr("(+ 2 \"3\")").unwrap();
     println!("Expression input: {}", e);
-    let res = eval(e, &mut env);
+    let res = eval(e, &mut env).unwrap();
     println!("Expression input: {}", res);
     assert_eq!(res, Number(5));
 
     let (_, e) = parse_expr("(- (+ 4 6 3) 3 5 2)").unwrap();
     println!("Expression input: {}", e);
-    let res = eval(e, &mut env);
+    let res = eval(e, &mut env).unwrap();
     println!("Expression input: {}", res);
     assert_ne!(res, Number(3));
 
     let (_, e) = parse_expr("(+ 2 (- 4 1))").unwrap();
     println!("Expression input: {}", e);
-    let res = eval(e, &mut env);
+    let res = eval(e, &mut env).unwrap();
     println!("Expression input: {}", res);
     assert_eq!(res, Number(5));
 }
@@ -376,7 +401,14 @@ fn eval_test2() {
     let mut env = Box::from(Env::new());
     let (_, e) = parse_expr("(define a 2)").unwrap();
     println!("Expression input: {}", e);
-    let res = eval(e, &mut env);
-    println!("Expression input: {}", res);
+    let res = eval(e, &mut env).unwrap();
+    println!("Expression result: {}", res);
     assert_eq!(res, Number(2));
+
+    let (_, e) = parse_expr("(a)").unwrap();
+    println!("Expression input: {}", e);
+    let res = eval(e, &mut env).unwrap();
+    println!("Expression result: {}", res);
+    assert_eq!(res, Number(2));
+
 }
