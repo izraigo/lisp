@@ -1,4 +1,3 @@
-use std::arch::aarch64::vreinterpret_u8_f32;
 use std::collections::HashMap;
 use nom::character::complete::space1;
 use nom::multi::{many0, separated_list1};
@@ -18,7 +17,6 @@ use nom::{
     multi::many1
   };
 use std::io::stdin;
-use core::slice::Iter;
 use std::fmt::{Debug, Display};
 use crate::LispVal::{Atom, Boolean, Number};
 
@@ -271,7 +269,7 @@ fn consume(opt: Option<&LispVal>, e: &str) -> Result<LispVal, String> {
 
 fn nothing_to_consume(opt: Option<&LispVal>) -> Result<(), String> {
     match opt {
-        Some(v) => Err("Error unexpected value".to_string()),
+        Some(v) => Err(format!("Error unexpected value {}", v)),
         None => Ok(())
     }
 }
@@ -281,7 +279,7 @@ fn extract_str_from_atom(r: Result<LispVal, String>) -> Result<String, String> {
     match r {
         Ok(Atom(s)) => Ok(s),
         Err(e) => Err(e),
-        other=> Err("Expected atom".to_string())
+        Ok(other)=> Err(format!("Expected atom but got {}", other))
     }
 }
 
@@ -296,14 +294,14 @@ fn define_var(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String
 }
 
 fn set_var(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String> {
-    if let Atom(s) = &list[1] {
-        let val = eval(list[2].clone(), env);
-        match env.vars.insert(s.to_string(), val.clone()) {
-            Some(v) => Err("Variable is not defined".to_string()),
-            None => Ok(val)
-        }
-    } else {
-        Err("Expected variable name".to_string())
+    let mut iter = list.iter();
+    consume(iter.next(), "Expect set!")?;
+    let name = extract_str_from_atom(consume(iter.next(), "Expect variable name"))?;
+    let val = consume(iter.next(), "Expect variable value").map(|a| eval(a, env))?;
+    nothing_to_consume(iter.next())?;
+    match env.vars.insert(name.clone(), val.clone()) {
+        Some(_) => Err(format!("Variable is not defined {}", name)),
+        None => Ok(val)
     }
 }
 
