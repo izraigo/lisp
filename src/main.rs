@@ -1,3 +1,4 @@
+use std::arch::aarch64::vreinterpret_u8_f32;
 use std::collections::HashMap;
 use nom::character::complete::space1;
 use nom::multi::{many0, separated_list1};
@@ -17,6 +18,7 @@ use nom::{
     multi::many1
   };
 use std::io::stdin;
+use core::slice::Iter;
 use std::fmt::{Debug, Display};
 use crate::LispVal::{Atom, Boolean, Number};
 
@@ -229,41 +231,87 @@ fn quoted_parser_test2() {
 }
 
 
-fn eval(v: LispVal, env: Box<Env>) -> LispVal {
+fn eval(v: LispVal, mut env: &mut Box<Env>) -> LispVal {
     match v {
         LispVal::Atom(_) => v,
         LispVal::String(_) => v,
         LispVal::Number(_) => v,
         LispVal::Boolean(_) => v,
         LispVal::Quote(q) => *q,
-        LispVal::List(v) => eval_list(&v, &env).unwrap(),
+        LispVal::List(v) => eval_list(&v, &mut env).unwrap(),
         LispVal::DottedList(_, _) => v,
         LispVal::Func { .. } => todo!()
     }
 }
 
-fn eval_list(list: &Vec<LispVal>, env: &Box<Env>) -> Result<LispVal, String> {
+fn eval_list(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String> {
     if let Ok(l) = apply_primitive(list, env) {
         return Ok(l);
     } else {
         let a = &list[0];
         if let Atom(s) = a {
             match s.as_str() {
-                "" => Ok(Atom("".to_string())),
-//todo
-                    _ => Err("".to_string())
-            };
-        };
-        return Err("".to_string())
+                "define" => define_var(list, env),
+                "set!" => set_var(list, env),
+                _ => Err("".to_string())
+            }
+        } else {
+            return Err("".to_string())
+        }
     }
 
 }
 
+fn consume(opt: Option<&LispVal>, e: &str) -> Result<LispVal, String> {
+    match opt {
+        Some(v) => Ok(v.clone()),
+        None => Err(e.to_string())
+    }
+}
+
+fn nothing_to_consume(opt: Option<&LispVal>) -> Result<(), String> {
+    match opt {
+        Some(v) => Err("Error unexpected value".to_string()),
+        None => Ok(())
+    }
+}
 
 
-fn apply_primitive(list: &Vec<LispVal>, env: &Box<Env> ) -> Result<LispVal, String> {
-    let left = extract_num_value(list[1].clone(), env.clone()).unwrap();
-    let right = extract_num_value(list[2].clone(), env.clone()).unwrap();
+fn extract_str_from_atom(r: Result<LispVal, String>) -> Result<String, String> {
+    match r {
+        Ok(Atom(s)) => Ok(s),
+        Err(e) => Err(e),
+        other=> Err("Expected atom".to_string())
+    }
+}
+
+fn define_var(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String> {
+    let mut iter = list.iter();
+    consume(iter.next(), "Expect define")?;
+    let name = extract_str_from_atom(consume(iter.next(), "Expect variable name"))?;
+    let val = consume(iter.next(), "Expect variable value").map(|a| eval(a, env))?;
+    nothing_to_consume(iter.next())?;
+    env.vars.insert(name, val.clone());
+    Ok(val)
+}
+
+fn set_var(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String> {
+    if let Atom(s) = &list[1] {
+        let val = eval(list[2].clone(), env);
+        match env.vars.insert(s.to_string(), val.clone()) {
+            Some(v) => Err("Variable is not defined".to_string()),
+            None => Ok(val)
+        }
+    } else {
+        Err("Expected variable name".to_string())
+    }
+}
+
+
+
+fn apply_primitive(list: &Vec<LispVal>, env: &mut Box<Env> ) -> Result<LispVal, String> {
+    let left = extract_num_value(list[1].clone(), env)?;
+    let right = extract_num_value(list[2].clone(), env)?;
 
     let operator = list[0].clone();
     if let Atom(s) = operator {
@@ -283,33 +331,54 @@ fn apply_primitive(list: &Vec<LispVal>, env: &Box<Env> ) -> Result<LispVal, Stri
     }
 }
 
-fn extract_num_value(lv: LispVal, env: Box<Env>) -> Result<i64, Result<LispVal, String>> {
+fn extract_num_value(lv: LispVal, env: &mut Box<Env>) -> Result<i64, String> {
     let left = eval(lv, env);
     match left {
         LispVal::Number(n) => Ok(n),
         LispVal::String(s) => Ok(s.parse().unwrap()),
-        _ => return Err(Err(format!("Left operand must be an integer {:?}", left))),
+        _ => return Err(format!("Left operand must be an integer {:?}", left)),
     }
 }
 
+fn extract_string_value(lv: LispVal, env: &mut Box<Env>) -> Result<String, Result<LispVal, String>> {
+    let left = eval(lv, env);
+    match left {
+        LispVal::Number(n) => Ok(n.to_string()),
+        LispVal::String(s) => Ok(s),
+        _ => return Err(Err(format!("Left operand must be a string {:?}", left))),
+    }
+}
+
+
+
+
 #[test]
 fn eval_test() {
-    let env = Box::from(Env::new());
+    let mut env = Box::from(Env::new());
     let (_, e) = parse_expr("(+ 2 \"3\")").unwrap();
     println!("Expression input: {}", e);
-    let res = eval(e, env.clone());
+    let res = eval(e, &mut env);
     println!("Expression input: {}", res);
     assert_eq!(res, Number(5));
 
     let (_, e) = parse_expr("(- (+ 4 6 3) 3 5 2)").unwrap();
     println!("Expression input: {}", e);
-    let res = eval(e, env.clone());
+    let res = eval(e, &mut env);
     println!("Expression input: {}", res);
     assert_ne!(res, Number(3));
 
     let (_, e) = parse_expr("(+ 2 (- 4 1))").unwrap();
     println!("Expression input: {}", e);
-    let res = eval(e, env.clone());
+    let res = eval(e, &mut env);
     println!("Expression input: {}", res);
     assert_eq!(res, Number(5));
+}
+#[test]
+fn eval_test2() {
+    let mut env = Box::from(Env::new());
+    let (_, e) = parse_expr("(define a 2)").unwrap();
+    println!("Expression input: {}", e);
+    let res = eval(e, &mut env);
+    println!("Expression input: {}", res);
+    assert_eq!(res, Number(2));
 }
