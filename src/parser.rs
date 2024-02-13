@@ -20,7 +20,6 @@ pub enum LispVal {
         args: Vec<String>,
         vararg: Option<String>,
         body: Box<LispVal>,
-        closure: Env,
     },
 }
 
