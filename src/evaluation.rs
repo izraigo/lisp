@@ -176,8 +176,7 @@ fn define_func(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, S
 }
 
 fn eval_function(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, String> {
-    let mut iter = list.iter();
-    let name = extract_str_from_atom(consume(iter.next(), "Expect function name"))?;
+    let name = extract_str_from_atom(consume(list.first(), "Expect function name"))?;
 
     let a = env.get(&name);
     if a.is_none() {
