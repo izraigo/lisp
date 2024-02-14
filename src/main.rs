@@ -9,6 +9,7 @@ mod evaluation;
 mod parser;
 mod env;
 mod lispval;
+mod lispErr;
 
 fn main() {
     println!("Lisp in rust!");
