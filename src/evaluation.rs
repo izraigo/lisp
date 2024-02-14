@@ -172,8 +172,8 @@ fn define_func(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, S
     let body = consume(iter.next(), "Expect body")?;
     nothing_to_consume(iter.next())?;
     let func = Func { args: params.clone(), body: Box::new(body), vararg: None };
-    env.set(name, func);
-    Ok(func.clone())
+    env.set(name, func.clone());
+    Ok(func)
 }
 
 fn eval_function(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, String> {
