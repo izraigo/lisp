@@ -1,13 +1,13 @@
-mod evaluation;
-mod parser;
-mod env;
+use std::io::{stdin, Write};
+
+use evaluation::eval;
+use parser::parse_expr;
 
 use crate::env::Closure;
 
-use parser::parse_expr;
-
-use evaluation::{eval};
-use std::io::{stdin, Write};
+mod evaluation;
+mod parser;
+mod env;
 
 fn main() {
     println!("Lisp in rust!");

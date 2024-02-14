@@ -1,10 +1,11 @@
+use std::fmt::Display;
+
 use nom::branch::alt;
 use nom::bytes::complete::{is_a, is_not};
 use nom::character::complete::{alpha1, alphanumeric1, char, digit1, space0, space1};
+use nom::IResult;
 use nom::multi::{many0, many1, separated_list1};
 use nom::sequence::{delimited, separated_pair};
-use nom::IResult;
-use std::fmt::Display;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum LispVal {

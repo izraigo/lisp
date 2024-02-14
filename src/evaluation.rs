@@ -1,9 +1,8 @@
+use std::ops::Deref;
+
 use crate::env::Closure;
 use crate::parser::LispVal;
 use crate::parser::LispVal::{Atom, Boolean, Func, Number};
-use std::collections::HashMap;
-use std::ops::Deref;
-use std::borrow::BorrowMut;
 
 pub fn eval(v: LispVal, mut env: &mut Box<Closure>) -> Result<LispVal, String> {
     match v {
