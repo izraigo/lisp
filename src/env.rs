@@ -21,6 +21,13 @@ impl Closure {
     }
 
     pub fn get(&self, name: &String) -> Option<&LispVal>{
-        self.vars.get(name)
+        let res = &self.vars.get(name);
+        if res.is_some() {
+            return *res;
+        }
+        match &self.parent {
+            Some(parent) => parent.get(name),
+            None => None
+        }
     }
 }

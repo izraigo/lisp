@@ -22,7 +22,7 @@ fn eval_list(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, Str
     if let Ok(l) = apply_primitive(list, env) {
         return Ok(l);
     } else {
-        let a = [define_func, apply_primitive, define_var, set_var, eval_function];
+        let a = [evaluate_if, define_func, apply_primitive, define_var, set_var, eval_function];
         match eval_any_of(list, env, &a) {
             Ok(r) => Ok(r),
             Err(e) => Err(e),
@@ -200,4 +200,18 @@ fn eval_function(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal,
         closure.set(arg.to_string(), arg_val);
     }
     eval(body, &mut closure)
+}
+
+fn evaluate_if(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, String> {
+    let mut iter = list.iter();
+    consume_exact(iter.next(), Atom("if".to_string()))?;
+    let condition = consume(iter.next(), "Expect condition ").map(|a| eval(a, env))??;
+    let left = consume(iter.next(), "Expect expression ")?;
+    let right = consume(iter.next(), "Expect expression ")?;
+    nothing_to_consume(iter.next())?;
+    match condition {
+        Boolean(true) => eval(left, env),
+        Boolean(false) => eval(right, env),
+        _ => Err(format!("Expected boolean condition {}", condition)),
+    }
 }
