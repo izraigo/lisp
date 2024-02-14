@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::parser::LispVal;
+use crate::lispval::LispVal;
 
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct Closure {

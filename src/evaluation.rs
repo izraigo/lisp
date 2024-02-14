@@ -1,8 +1,8 @@
 use std::ops::Deref;
 
 use crate::env::Closure;
-use crate::parser::LispVal;
-use crate::parser::LispVal::{Atom, Boolean, Func, Number};
+use crate::lispval::LispVal;
+use crate::lispval::LispVal::{Atom, Boolean, Func, Number};
 
 pub fn eval(v: LispVal, mut env: &mut Box<Closure>) -> Result<LispVal, String> {
     match v {

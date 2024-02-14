@@ -8,6 +8,7 @@ use crate::env::Closure;
 mod evaluation;
 mod parser;
 mod env;
+mod lispval;
 
 fn main() {
     println!("Lisp in rust!");
