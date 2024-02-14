@@ -4,7 +4,6 @@ mod parser;
 use parser::parse_expr;
 
 use evaluation::{eval, Env};
-use std::fmt::Debug;
 use std::io::{stdin, Write};
 
 fn main() {

@@ -1,4 +1,3 @@
-use crate::Env;
 use nom::branch::alt;
 use nom::bytes::complete::{is_a, is_not};
 use nom::character::complete::{alpha1, alphanumeric1, char, digit1, space0, space1};
@@ -39,7 +38,7 @@ impl Display for LispVal {
                 write!(f, "{} . {}", a.join(" "), v1.to_string())
             }
             LispVal::Quote(q) => write!(f, "quote {}", q),
-            LispVal::Func { .. } => write!(f, "Func {}", ""),
+            LispVal::Func {args, .. } => write!(f, "Func {}", args.join(" ")),
         }
     }
 }

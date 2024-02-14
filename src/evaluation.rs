@@ -185,7 +185,6 @@ fn define_func(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, Strin
     let params: &Vec<String> = &definition[1..].iter().map(|a| format!("{}", a)).collect();
     let body = consume(iter.next(), "Expect body")?;
     nothing_to_consume(iter.next())?;
-    let closure = env.child();
     env.vars.insert(name, Func { args: params.clone(), body: Box::new(body), vararg: None });
     Ok(Atom("".to_string()))
 }
@@ -198,7 +197,7 @@ fn eval_function(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, Str
     if a.is_none() {
         return Err(format!("Function {} not found", name));
     }
-    let Some(Func { args: args, body: body, vararg: vararg }) = a
+    let Some(Func { args, body, vararg: _vararg }) = a
         else {
             return Err(format!("Incorrect function call"));
         };
