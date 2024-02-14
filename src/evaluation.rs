@@ -43,13 +43,15 @@ fn eval_list(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, Str
 
 fn eval_any_of<T>(list: &Vec<LispVal>, env: &mut Box<Closure>, f: &[T]) -> Result<LispVal, String>
     where T: Fn(&Vec<LispVal>, &mut Box<Closure>) -> Result<LispVal, String> {
+    let mut err: Result<LispVal, String> = Err("".to_string());
     for e in f {
         match e(list, env) {
             Ok(val) => return Ok(val),
-            Err(_) => (),
+            Err(e) => err = Err(e),
         }
     }
-    Err("Function is nor recognised".to_string())
+    err
+    //Err(format!("Function is not recognised {}", LispVal::List(list.clone())))
 }
 
 
