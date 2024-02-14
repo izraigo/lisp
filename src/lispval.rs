@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use crate::env::Closure;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum LispVal {
@@ -12,7 +13,8 @@ pub enum LispVal {
     Func {
         args: Vec<String>,
         vararg: Option<String>,
-        body: Box<LispVal>,
+        body: Vec<LispVal>,
+        closure: Box<Closure>,
     },
 }
 
@@ -32,7 +34,11 @@ impl Display for LispVal {
                 write!(f, "{} . {}", a.join(" "), v1.to_string())
             }
             LispVal::Quote(q) => write!(f, "quote {}", q),
-            LispVal::Func {args, .. } => write!(f, "Func {}", args.join(" ")),
+            LispVal::Func {args, body, .. } => {
+                let body: Vec<String> = body.into_iter().map(|i| i.to_string()).collect();
+                write!(f, "lambda {} {}", args.join(" "), body.join(" "))
+            },
         }
     }
 }
+// (define (counter inc) (lambda (x) (set! inc (+ x inc)) inc))
