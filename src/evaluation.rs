@@ -21,7 +21,7 @@ fn eval_list(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, Str
     if let Ok(l) = apply_primitive(list, env) {
         return Ok(l);
     } else {
-        let a = [evaluate_if, define_func, apply_primitive, define_var, set_var, eval_function];
+        let a = [evaluate_if, define_var, define_func, apply_primitive, set_var, eval_lambda, eval_function_call];
         match eval_any_of(list, env, &a) {
             Ok(r) => Ok(r),
             Err(e) => Err(e),
@@ -176,14 +176,20 @@ fn define_func(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, S
     Ok(func)
 }
 
-fn eval_function(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, String> {
-    let name = extract_str_from_atom(consume(list.first(), "Expect function name"))?;
+fn eval_lambda(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, String> {
+    let mut iter = list.iter();
+    consume_exact(iter.next(), Atom("lambda".to_string()))?;
+    let definition = consume_list(iter.next())?;
+    let params: &Vec<String> = &definition[1..].iter().map(|a| format!("{}", a)).collect();
+    let body = consume(iter.next(), "Expect body")?;
+    nothing_to_consume(iter.next())?;
+    Ok(Func { args: params.clone(), body: Box::new(body), vararg: None })
+}
 
-    let a = env.get(&name);
-    if a.is_none() {
-        return Err(format!("Function {} not found", name));
-    }
-    let Some(Func { args, body, vararg: _vararg }) = a
+fn eval_function_call(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, String> {
+    let a = consume(list.first(), "Expect condition ").map(|a| eval(a, env))?;
+
+    let Ok(Func { args, body, vararg: _vararg }) = a
         else {
             return Err(format!("Incorrect function call"));
         };
