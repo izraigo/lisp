@@ -1,14 +1,17 @@
 mod evaluation;
 mod parser;
+mod env;
+
+use crate::env::Closure;
 
 use parser::parse_expr;
 
-use evaluation::{eval, Env};
+use evaluation::{eval};
 use std::io::{stdin, Write};
 
 fn main() {
     println!("Lisp in rust!");
-    let mut env = Box::from(Env::new());
+    let mut env = Box::from(Closure::new());
     loop {
         let mut s = String::new();
         print!("lisp>>> ");
@@ -27,7 +30,7 @@ fn main() {
 
 #[test]
 fn eval_test() {
-    let mut env = Box::from(Env::new());
+    let mut env = Box::from(Closure::new());
     let (_, e) = parse_expr("(+ 2 \"3\")").unwrap();
     println!("Expression input: {}", e);
     let res = eval(e, &mut env).unwrap();
@@ -48,7 +51,7 @@ fn eval_test() {
 }
 #[test]
 fn eval_test2() {
-    let mut env = Box::from(Env::new());
+    let mut env = Box::from(Closure::new());
     let (_, e) = parse_expr("(define a 2)").unwrap();
     println!("Expression input: {}", e);
     let res = eval(e, &mut env).unwrap();

@@ -1,26 +1,11 @@
+use crate::env::Closure;
 use crate::parser::LispVal;
 use crate::parser::LispVal::{Atom, Boolean, Func, Number};
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::borrow::BorrowMut;
 
-#[derive(Clone, Debug, PartialEq, Default)]
-pub struct Env {
-    parent: Option<Box<Env>>,
-    vars: HashMap<String, LispVal>,
-}
-
-impl Env {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn child(&self) -> Self {
-        Env { parent: Some(Box::new(self.clone())), vars: HashMap::new() }
-    }
-}
-
-pub fn eval(v: LispVal, mut env: &mut Box<Env>) -> Result<LispVal, String> {
+pub fn eval(v: LispVal, mut env: &mut Box<Closure>) -> Result<LispVal, String> {
     match v {
         LispVal::Atom(var) => get_var(var, env),
         LispVal::String(_) => Ok(v),
@@ -33,7 +18,7 @@ pub fn eval(v: LispVal, mut env: &mut Box<Env>) -> Result<LispVal, String> {
     }
 }
 
-fn eval_list(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String> {
+fn eval_list(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, String> {
     if let Ok(l) = apply_primitive(list, env) {
         return Ok(l);
     } else {
@@ -56,8 +41,8 @@ fn eval_list(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String>
     }
 }
 
-fn eval_any_of<T>(list: &Vec<LispVal>, env: &mut Box<Env>, f: &[T]) -> Result<LispVal, String>
-    where T: Fn(&Vec<LispVal>, &mut Box<Env>) -> Result<LispVal, String> {
+fn eval_any_of<T>(list: &Vec<LispVal>, env: &mut Box<Closure>, f: &[T]) -> Result<LispVal, String>
+    where T: Fn(&Vec<LispVal>, &mut Box<Closure>) -> Result<LispVal, String> {
     for e in f {
         match e(list, env) {
             Ok(val) => return Ok(val),
@@ -107,36 +92,36 @@ fn extract_str_from_atom(r: Result<LispVal, String>) -> Result<String, String> {
     }
 }
 
-fn define_var(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String> {
+fn define_var(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, String> {
     let mut iter = list.iter();
     consume_exact(iter.next(), Atom("define".to_string()))?;
     let name = extract_str_from_atom(consume(iter.next(), "Expect variable name"))?;
     let val = consume(iter.next(), "Expect variable value").map(|a| eval(a, env))??;
     nothing_to_consume(iter.next())?;
-    env.vars.insert(name, val.clone());
+    env.set(name, val.clone());
     Ok(val)
 }
 
-fn set_var(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String> {
+fn set_var(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, String> {
     let mut iter = list.iter();
     consume_exact(iter.next(), Atom("set!".to_string()))?;
     let name = extract_str_from_atom(consume(iter.next(), "Expect variable name"))?;
     let val = consume(iter.next(), "Expect variable value").map(|a| eval(a, env))??;
     nothing_to_consume(iter.next())?;
-    match env.vars.insert(name.clone(), val.clone()) {
+    match env.set(name.clone(), val.clone()) {
         Some(_) => Err(format!("Variable is not defined {}", name)),
         None => Ok(val),
     }
 }
 
-fn get_var(name: String, env: &mut Box<Env>) -> Result<LispVal, String> {
-    match env.vars.get(&name) {
+fn get_var(name: String, env: &mut Box<Closure>) -> Result<LispVal, String> {
+    match env.get(&name) {
         Some(v) => Ok(v.clone()),
         None => Err(format!("Variable {} is not defined", name)),
     }
 }
 
-fn apply_primitive(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String> {
+fn apply_primitive(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, String> {
     let mut iter = list.iter();
     let operator = consume(iter.next(), "Expect operator")?;
     let left = extract_num_value(consume(iter.next(), "Expect argument")?, env)?;
@@ -159,7 +144,7 @@ fn apply_primitive(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, S
     }
 }
 
-fn extract_num_value(lv: LispVal, env: &mut Box<Env>) -> Result<i64, String> {
+fn extract_num_value(lv: LispVal, env: &mut Box<Closure>) -> Result<i64, String> {
     let left = eval(lv, env)?;
     match left {
         LispVal::Number(n) => Ok(n),
@@ -168,7 +153,7 @@ fn extract_num_value(lv: LispVal, env: &mut Box<Env>) -> Result<i64, String> {
     }
 }
 
-fn extract_string_value(lv: LispVal, env: &mut Box<Env>) -> Result<String, String> {
+fn extract_string_value(lv: LispVal, env: &mut Box<Closure>) -> Result<String, String> {
     let left = eval(lv, env)?;
     match left {
         LispVal::Number(n) => Ok(n.to_string()),
@@ -177,7 +162,7 @@ fn extract_string_value(lv: LispVal, env: &mut Box<Env>) -> Result<String, Strin
     }
 }
 
-fn define_func(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String> {
+fn define_func(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, String> {
     let mut iter = list.iter();
     consume_exact(iter.next(), Atom("define".to_string()))?;
     let definition = consume_list(iter.next())?;
@@ -185,15 +170,15 @@ fn define_func(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, Strin
     let params: &Vec<String> = &definition[1..].iter().map(|a| format!("{}", a)).collect();
     let body = consume(iter.next(), "Expect body")?;
     nothing_to_consume(iter.next())?;
-    env.vars.insert(name, Func { args: params.clone(), body: Box::new(body), vararg: None });
+    env.set(name, Func { args: params.clone(), body: Box::new(body), vararg: None });
     Ok(Atom("".to_string()))
 }
 
-fn eval_function(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, String> {
+fn eval_function(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, String> {
     let mut iter = list.iter();
     let name = extract_str_from_atom(consume(iter.next(), "Expect function name"))?;
 
-    let a = env.vars.get(name.as_str());
+    let a = env.get(&name);
     if a.is_none() {
         return Err(format!("Function {} not found", name));
     }
@@ -210,7 +195,7 @@ fn eval_function(list: &Vec<LispVal>, env: &mut Box<Env>) -> Result<LispVal, Str
 
     for (i, arg) in args.iter().enumerate() {
         let arg_val = eval(list[i + 1].clone(), env)?;
-        closure.vars.borrow_mut().insert(arg.to_string(), arg_val);
+        closure.set(arg.to_string(), arg_val);
     }
     eval(body, &mut closure)
 }
