@@ -5,7 +5,7 @@ use std::io::{stdin, Write};
 use evaluation::eval;
 use parser::parse_expr;
 
-use crate::env::Closure;
+use crate::env::Env;
 
 mod evaluation;
 mod parser;
@@ -15,7 +15,7 @@ mod lispErr;
 
 fn main() {
     println!("Lisp in rust!");
-    let env = Rc::from(RefCell::new(Closure::new()));
+    let env = Rc::from(RefCell::new(Env::new()));
     loop {
         let mut s = String::new();
         print!("lisp>>> ");
@@ -34,7 +34,7 @@ fn main() {
 
 #[test]
 fn eval_test() {
-    let env = Rc::from(RefCell::new(Closure::new()));
+    let env = Rc::from(RefCell::new(Env::new()));
     let (_, e) = parse_expr("(+ 2 \"3\")").unwrap();
     println!("Expression input: {}", e);
     let res = eval(e, env.clone()).unwrap();
@@ -55,7 +55,7 @@ fn eval_test() {
 }
 #[test]
 fn eval_test2() {
-    let env = Rc::from(RefCell::new(Closure::new()));
+    let env = Rc::from(RefCell::new(Env::new()));
     let (_, e) = parse_expr("(define a 2)").unwrap();
     println!("Expression input: {}", e);
     let res = eval(e, env.clone()).unwrap();

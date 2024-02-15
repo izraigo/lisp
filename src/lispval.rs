@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::fmt::Display;
-use crate::env::Closure;
+use crate::env::Env;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum LispVal {
@@ -16,7 +16,7 @@ pub enum LispVal {
         args: Vec<String>,
         vararg: Option<String>,
         body: Vec<LispVal>,
-        closure: Rc<RefCell<Closure>>,
+        closure: Rc<RefCell<Env>>,
     },
 }
 

@@ -6,17 +6,17 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 #[derive(Clone, Debug, PartialEq, Default)]
-pub struct Closure {
-    parent: Option<Rc<RefCell<Closure>>>,
+pub struct Env {
+    parent: Option<Rc<RefCell<Env>>>,
     vars: HashMap<String, LispVal>,
 }
 
-impl Closure {
+impl Env {
     pub fn new() -> Self {
         Default::default()
     }
-    pub fn child(parent: Rc<RefCell<Closure>> ) -> Closure {
-        Closure { parent: Some(parent), vars: HashMap::new() }
+    pub fn child(parent: Rc<RefCell<Env>> ) -> Env {
+        Env { parent: Some(parent), vars: HashMap::new() }
     }
 
     pub fn set(&mut self, name: String, val: LispVal) -> Result<LispVal, LispErr>{
