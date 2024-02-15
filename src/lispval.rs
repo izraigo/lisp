@@ -43,4 +43,3 @@ impl Display for LispVal {
         }
     }
 }
-// (define (counter inc) (lambda (x) (set! inc (+ x inc)) inc))
