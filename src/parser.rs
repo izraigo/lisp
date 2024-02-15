@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use nom::branch::alt;
 use nom::bytes::complete::{is_a, is_not};
 use nom::character::complete::{alpha1, alphanumeric1, char, digit1, space0, space1};

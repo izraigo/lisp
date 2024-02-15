@@ -1,5 +1,4 @@
 use std::fmt::Display;
-use crate::lispval::LispVal;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum LispErr {

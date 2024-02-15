@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::fmt::Display;
 use crate::env::Closure;
 
@@ -14,7 +16,7 @@ pub enum LispVal {
         args: Vec<String>,
         vararg: Option<String>,
         body: Vec<LispVal>,
-        closure: Box<Closure>,
+        closure: Rc<RefCell<Closure>>,
     },
 }
 

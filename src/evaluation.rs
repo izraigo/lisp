@@ -1,24 +1,26 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::env::Closure;
 use crate::lispErr::LispErr;
 use crate::lispErr::LispErr::{Choice, Runtime};
 use crate::lispval::LispVal;
 use crate::lispval::LispVal::{Atom, Boolean, Func, Number};
 
-pub fn eval(v: LispVal, mut env: &mut Box<Closure>) -> Result<LispVal, LispErr> {
+pub fn eval(v: LispVal, env: Rc<RefCell<Closure>>) -> Result<LispVal, LispErr> {
     match v {
         LispVal::Atom(var) => get_var(var, env),
         LispVal::String(_) => Ok(v),
         LispVal::Number(_) => Ok(v),
         LispVal::Boolean(_) => Ok(v),
         LispVal::Quote(q) => Ok(*q),
-        LispVal::List(v) => eval_list(&v, &mut env),
+        LispVal::List(v) => eval_list(&v, env),
         LispVal::DottedList(_, _) => Ok(v),
         LispVal::Func { .. } => Ok(v),
     }
 }
 
-fn eval_list(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, LispErr> {
-    if let Ok(l) = apply_primitive(list, env) {
+fn eval_list(list: &Vec<LispVal>, env: Rc<RefCell<Closure>>) -> Result<LispVal, LispErr> {
+    if let Ok(l) = apply_primitive(list, env.clone()) {
         return Ok(l);
     } else {
         let a = [evaluate_if, define_var, define_func, apply_primitive, set_var, eval_lambda, eval_function_call];
@@ -40,10 +42,10 @@ fn eval_list(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, Lis
     }
 }
 
-fn eval_any_of<T>(list: &Vec<LispVal>, env: &mut Box<Closure>, f: &[T]) -> Result<LispVal, LispErr>
-    where T: Fn(&Vec<LispVal>, &mut Box<Closure>) -> Result<LispVal, LispErr> {
+fn eval_any_of<T>(list: &Vec<LispVal>, env: Rc<RefCell<Closure>>, f: &[T]) -> Result<LispVal, LispErr>
+    where T: Fn(&Vec<LispVal>, Rc<RefCell<Closure>>) -> Result<LispVal, LispErr> {
     for e in f {
-        match e(list, env) {
+        match e(list, env.clone()) {
             Ok(val) => return Ok(val),
             Err(LispErr::Runtime(r)) => return Err(Runtime(r)),
             Err(LispErr::Choice(_)) => (),
@@ -101,35 +103,35 @@ fn extract_str_from_atom(r: Result<LispVal, LispErr>) -> Result<String, LispErr>
     }
 }
 
-fn define_var(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, LispErr> {
+fn define_var(list: &Vec<LispVal>, env: Rc<RefCell<Closure>>) -> Result<LispVal, LispErr> {
     let mut iter = list.iter();
     to_choice(consume_exact(iter.next(), Atom("define".to_string())))?;
     let name = match to_choice(consume(iter.next(), "Expect variable name"))? {
         Atom(s) => s,
         _ => return Err(Choice("Expect variable name".to_string())),
     };
-    let val = consume(iter.next(), "Expect variable value").map(|a| eval(a, env))??;
+    let val = consume(iter.next(), "Expect variable value").map(|a| eval(a, env.clone()))??;
     nothing_to_consume(iter.next())?;
-    env.define(name, val.clone())
+    env.borrow_mut().define(name, val.clone())
 }
 
-fn set_var(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, LispErr> {
+fn set_var(list: &Vec<LispVal>, env: Rc<RefCell<Closure>>) -> Result<LispVal, LispErr> {
     let mut iter = list.iter();
     to_choice(consume_exact(iter.next(), Atom("set!".to_string())))?;
     let name = extract_str_from_atom(consume(iter.next(), "Expect variable name"))?;
-    let val = consume(iter.next(), "Expect variable value").map(|a| eval(a, env))??;
+    let val = consume(iter.next(), "Expect variable value").map(|a| eval(a, env.clone()))??;
     nothing_to_consume(iter.next())?;
-    env.set(name.clone(), val.clone())
+    env.borrow_mut().set(name.clone(), val.clone())
 }
 
-fn get_var(name: String, env: &mut Box<Closure>) -> Result<LispVal, LispErr> {
-    match env.get(&name) {
+fn get_var(name: String, env: Rc<RefCell<Closure>>) -> Result<LispVal, LispErr> {
+    match env.borrow_mut().get(&name) {
         Some(v) => Ok(v.clone()),
         None => Err(Runtime(format!("Variable {} is not defined", name))),
     }
 }
 
-fn apply_primitive(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, LispErr> {
+fn apply_primitive(list: &Vec<LispVal>, env: Rc<RefCell<Closure>>) -> Result<LispVal, LispErr> {
     let mut iter = list.iter();
     let operator = to_choice(consume(iter.next(), "Expect operator"))?;
 
@@ -145,7 +147,7 @@ fn apply_primitive(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVa
             "!=" => {|a, b| {Boolean(a != b)}},
             _ => return Err(Choice(format!("Invalid infix operator: {}", s))),
         };
-        let left = extract_num_value(consume(iter.next(), "Expect argument")?, env)?;
+        let left = extract_num_value(consume(iter.next(), "Expect argument")?, env.clone())?;
         let right = extract_num_value(consume(iter.next(), "Expect argument")?, env)?;
         Ok(fun(left, right))
     } else {
@@ -153,7 +155,7 @@ fn apply_primitive(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVa
     }
 }
 
-fn extract_num_value(lv: LispVal, env: &mut Box<Closure>) -> Result<i64, LispErr> {
+fn extract_num_value(lv: LispVal, env: Rc<RefCell<Closure>>) -> Result<i64, LispErr> {
     let left = eval(lv, env)?;
     match left {
         LispVal::Number(n) => Ok(n),
@@ -162,7 +164,7 @@ fn extract_num_value(lv: LispVal, env: &mut Box<Closure>) -> Result<i64, LispErr
     }
 }
 
-fn extract_string_value(lv: LispVal, env: &mut Box<Closure>) -> Result<String, LispErr> {
+fn extract_string_value(lv: LispVal, env: Rc<RefCell<Closure>>) -> Result<String, LispErr> {
     let left = eval(lv, env)?;
     match left {
         LispVal::Number(n) => Ok(n.to_string()),
@@ -171,7 +173,7 @@ fn extract_string_value(lv: LispVal, env: &mut Box<Closure>) -> Result<String, L
     }
 }
 
-fn define_func(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, LispErr> {
+fn define_func(list: &Vec<LispVal>, env: Rc<RefCell<Closure>>) -> Result<LispVal, LispErr> {
     let mut iter = list.iter();
     to_choice(consume_exact(iter.next(), Atom("define".to_string())))?;
     let definition = consume_list(iter.next())?;
@@ -183,10 +185,10 @@ fn define_func(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, L
         body.push(v.clone());
     }
     let func = Func { args: params.clone(), body: body, vararg: None, closure: env.clone() };
-    env.define(name, func.clone())
+    env.borrow_mut().define(name, func.clone())
 }
 
-fn eval_lambda(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, LispErr> {
+fn eval_lambda(list: &Vec<LispVal>, env: Rc<RefCell<Closure>>) -> Result<LispVal, LispErr> {
     let mut iter = list.iter();
     to_choice(consume_exact(iter.next(), Atom("lambda".to_string())))?;
     let definition = consume_list(iter.next())?;
@@ -198,8 +200,8 @@ fn eval_lambda(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, L
     Ok(Func { args: params.clone(), body: body, vararg: None, closure: env.clone()})
 }
 
-fn eval_function_call(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, LispErr> {
-    let a = consume(list.first(), "Expect condition ").map(|a| eval(a, env))?;
+fn eval_function_call(list: &Vec<LispVal>, env: Rc<RefCell<Closure>>) -> Result<LispVal, LispErr> {
+    let a = consume(list.first(), "Expect condition ").map(|a| eval(a, env.clone()))?;
 
     let Ok(Func { args, body, vararg: _vararg, closure }) = a
         else {
@@ -211,15 +213,15 @@ fn eval_function_call(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<Lis
         return Err(Runtime("Incorrect argument list".to_string()));
     }
 
-    let mut closure = Box::new(closure.child());
+    let closure = Rc::new(RefCell::new(Closure::child(closure)));
     for (i, arg) in args.iter().enumerate() {
-        let arg_val = eval(list[i + 1].clone(), env)?;
-        closure.define(arg.to_string(), arg_val);
+        let arg_val = eval(list[i + 1].clone(), env.clone())?;
+        _ = closure.borrow_mut().define(arg.to_string(), arg_val);
     }
 
     let mut result = Err(Runtime("not executed".to_string()));
     for b in body {
-        result = eval(b.clone(), &mut closure);
+        result = eval(b.clone(), closure.clone());
         if result.is_err() {
             return result;
         }
@@ -227,10 +229,10 @@ fn eval_function_call(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<Lis
     result
 }
 
-fn evaluate_if(list: &Vec<LispVal>, env: &mut Box<Closure>) -> Result<LispVal, LispErr> {
+fn evaluate_if(list: &Vec<LispVal>, env: Rc<RefCell<Closure>>) -> Result<LispVal, LispErr> {
     let mut iter = list.iter();
     to_choice(consume_exact(iter.next(), Atom("if".to_string())))?;
-    let condition = consume(iter.next(), "Expect condition ").map(|a| eval(a, env))??;
+    let condition = consume(iter.next(), "Expect condition ").map(|a| eval(a, env.clone()))??;
     let left = consume(iter.next(), "Expect expression ")?;
     let right = consume(iter.next(), "Expect expression ")?;
     nothing_to_consume(iter.next())?;
