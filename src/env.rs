@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use crate::lispErr::LispErr;
-use crate::lispErr::LispErr::Runtime;
+use crate::error::LispErr;
+use crate::error::LispErr::Runtime;
 use crate::lispval::LispVal;
 use std::rc::Rc;
 use std::cell::RefCell;

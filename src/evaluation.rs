@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use crate::env::Env;
-use crate::lispErr::LispErr;
-use crate::lispErr::LispErr::{Choice, Runtime};
+use crate::error::LispErr;
+use crate::error::LispErr::{WrongExpression, Runtime};
 use crate::lispval::LispVal;
 use crate::lispval::LispVal::{Atom, Boolean, Func, Number};
 
@@ -48,7 +48,7 @@ fn eval_any_of<T>(list: &Vec<LispVal>, env: Rc<RefCell<Env>>, f: &[T]) -> Result
         match e(list, env.clone()) {
             Ok(val) => return Ok(val),
             Err(LispErr::Runtime(r)) => return Err(Runtime(r)),
-            Err(LispErr::Choice(_)) => (),
+            Err(LispErr::WrongExpression(_)) => (),
         }
     }
     Err(Runtime("Invalid expression".to_string()))
@@ -105,10 +105,10 @@ fn extract_str_from_atom(r: Result<LispVal, LispErr>) -> Result<String, LispErr>
 
 fn define_var(list: &Vec<LispVal>, env: Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
     let mut iter = list.iter();
-    to_choice(consume_exact(iter.next(), Atom("define".to_string())))?;
-    let name = match to_choice(consume(iter.next(), "Expect variable name"))? {
+    to_wrong_expr(consume_exact(iter.next(), Atom("define".to_string())))?;
+    let name = match to_wrong_expr(consume(iter.next(), "Expect variable name"))? {
         Atom(s) => s,
-        _ => return Err(Choice("Expect variable name".to_string())),
+        _ => return Err(WrongExpression("Expect variable name".to_string())),
     };
     let val = consume(iter.next(), "Expect variable value").map(|a| eval(a, env.clone()))??;
     nothing_to_consume(iter.next())?;
@@ -117,7 +117,7 @@ fn define_var(list: &Vec<LispVal>, env: Rc<RefCell<Env>>) -> Result<LispVal, Lis
 
 fn set_var(list: &Vec<LispVal>, env: Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
     let mut iter = list.iter();
-    to_choice(consume_exact(iter.next(), Atom("set!".to_string())))?;
+    to_wrong_expr(consume_exact(iter.next(), Atom("set!".to_string())))?;
     let name = extract_str_from_atom(consume(iter.next(), "Expect variable name"))?;
     let val = consume(iter.next(), "Expect variable value").map(|a| eval(a, env.clone()))??;
     nothing_to_consume(iter.next())?;
@@ -133,7 +133,7 @@ fn get_var(name: String, env: Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
 
 fn apply_primitive(list: &Vec<LispVal>, env: Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
     let mut iter = list.iter();
-    let operator = to_choice(consume(iter.next(), "Expect operator"))?;
+    let operator = to_wrong_expr(consume(iter.next(), "Expect operator"))?;
 
     if let Atom(s) = operator {
         let fun = match s.as_str() {
@@ -145,7 +145,7 @@ fn apply_primitive(list: &Vec<LispVal>, env: Rc<RefCell<Env>>) -> Result<LispVal
             ">" => {|a, b| {Boolean(a > b)}},
             "=" => {|a, b| {Boolean(a == b)}},
             "!=" => {|a, b| {Boolean(a != b)}},
-            _ => return Err(Choice(format!("Invalid infix operator: {}", s))),
+            _ => return Err(WrongExpression(format!("Invalid infix operator: {}", s))),
         };
         let left = extract_num_value(consume(iter.next(), "Expect argument")?, env.clone())?;
         let right = extract_num_value(consume(iter.next(), "Expect argument")?, env)?;
@@ -175,7 +175,7 @@ fn extract_string_value(lv: LispVal, env: Rc<RefCell<Env>>) -> Result<String, Li
 
 fn define_func(list: &Vec<LispVal>, env: Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
     let mut iter = list.iter();
-    to_choice(consume_exact(iter.next(), Atom("define".to_string())))?;
+    to_wrong_expr(consume_exact(iter.next(), Atom("define".to_string())))?;
     let definition = consume_list(iter.next())?;
     let name = extract_str_from_atom(consume(definition.first(), "Expect function name"))?;
     let params: &Vec<String> = &definition[1..].iter().map(|a| format!("{}", a)).collect();
@@ -190,7 +190,7 @@ fn define_func(list: &Vec<LispVal>, env: Rc<RefCell<Env>>) -> Result<LispVal, Li
 
 fn eval_lambda(list: &Vec<LispVal>, env: Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
     let mut iter = list.iter();
-    to_choice(consume_exact(iter.next(), Atom("lambda".to_string())))?;
+    to_wrong_expr(consume_exact(iter.next(), Atom("lambda".to_string())))?;
     let definition = consume_list(iter.next())?;
     let params: &Vec<String> = &definition[0..].iter().map(|a| format!("{}", a)).collect();
     let mut body: Vec<LispVal> = Vec::new();
@@ -231,7 +231,7 @@ fn eval_function_call(list: &Vec<LispVal>, env: Rc<RefCell<Env>>) -> Result<Lisp
 
 fn evaluate_if(list: &Vec<LispVal>, env: Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
     let mut iter = list.iter();
-    to_choice(consume_exact(iter.next(), Atom("if".to_string())))?;
+    to_wrong_expr(consume_exact(iter.next(), Atom("if".to_string())))?;
     let condition = consume(iter.next(), "Expect condition ").map(|a| eval(a, env.clone()))??;
     let left = consume(iter.next(), "Expect expression ")?;
     let right = consume(iter.next(), "Expect expression ")?;
@@ -243,10 +243,10 @@ fn evaluate_if(list: &Vec<LispVal>, env: Rc<RefCell<Env>>) -> Result<LispVal, Li
     }
 }
 
-fn to_choice(r: Result<LispVal, LispErr>) -> Result<LispVal, LispErr> {
+fn to_wrong_expr(r: Result<LispVal, LispErr>) -> Result<LispVal, LispErr> {
     match r {
         Ok(_) => r,
-        Err(Runtime(r)) => Err(Choice(r)),
+        Err(Runtime(r)) => Err(WrongExpression(r)),
         _ => r,
     }
 }
