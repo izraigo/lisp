@@ -1,11 +1,8 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use crate::evaluation::create_eden_env;
 use std::io::{stdin, Write};
 
 use evaluation::eval;
 use parser::parse_expr;
-
-use crate::env::Env;
 
 mod evaluation;
 mod parser;
@@ -15,7 +12,7 @@ mod error;
 
 fn main() {
     println!("Lisp in rust!");
-    let env = Rc::from(RefCell::new(Env::new()));
+    let env = create_eden_env();
     loop {
         let mut s = String::new();
         print!("lisp>>> ");
@@ -34,7 +31,7 @@ fn main() {
 
 #[test]
 fn eval_test() {
-    let env = Rc::from(RefCell::new(Env::new()));
+    let env = create_eden_env();
     let (_, e) = parse_expr("(+ 2 \"3\")").unwrap();
     println!("Expression input: {}", e);
     let res = eval(e, env.clone()).unwrap();
@@ -45,7 +42,7 @@ fn eval_test() {
     println!("Expression input: {}", e);
     let res = eval(e, env.clone()).unwrap();
     println!("Expression input: {}", res);
-    assert_ne!(res.to_string(), "5");
+    assert_eq!(res.to_string(), "3");
 
     let (_, e) = parse_expr("(+ 2 (- 4 1))").unwrap();
     println!("Expression input: {}", e);
@@ -55,14 +52,14 @@ fn eval_test() {
 }
 #[test]
 fn eval_test2() {
-    let env = Rc::from(RefCell::new(Env::new()));
+    let env = create_eden_env();
     let (_, e) = parse_expr("(define a 2)").unwrap();
     println!("Expression input: {}", e);
     let res = eval(e, env.clone()).unwrap();
     println!("Expression result: {}", res);
     assert_eq!(res.to_string(), "2");
 
-    let (_, e) = parse_expr("(a)").unwrap();
+    let (_, e) = parse_expr("a").unwrap();
     println!("Expression input: {}", e);
     let res = eval(e, env).unwrap();
     println!("Expression result: {}", res);

@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::fmt::Display;
 use crate::env::Env;
+use crate::error::LispErr;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum LispVal {
@@ -18,6 +19,7 @@ pub enum LispVal {
         body: Vec<LispVal>,
         closure: Rc<RefCell<Env>>,
     },
+    PrimitiveFunc(fn(&LispVal, &LispVal) -> Result<LispVal, LispErr>)
 }
 
 impl Display for LispVal {
@@ -40,6 +42,7 @@ impl Display for LispVal {
                 let body: Vec<String> = body.into_iter().map(|i| i.to_string()).collect();
                 write!(f, "lambda {} {}", args.join(" "), body.join(" "))
             },
+            LispVal::PrimitiveFunc(_) => write!(f, "primitiveFunc"),
         }
     }
 }
