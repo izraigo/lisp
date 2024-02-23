@@ -19,9 +19,9 @@ impl Env {
         Env { parent: Some(parent), vars: HashMap::new() }
     }
 
-    pub fn set(&mut self, name: String, val: LispVal) -> Result<LispVal, LispErr>{
-        if self.vars.contains_key(&name.clone()) {
-            self.vars.insert(name.clone(), val.clone());
+    pub fn set(&mut self, name: &str, val: LispVal) -> Result<LispVal, LispErr>{
+        if self.vars.contains_key(name) {
+            self.vars.insert(name.to_string(), val.clone());
             Ok(val)
         } else {
             match &self.parent {
@@ -31,12 +31,12 @@ impl Env {
         }
     }
 
-    pub fn define(&mut self, name: String, val: LispVal) -> Result<LispVal, LispErr> {
-        self.vars.insert(name, val.clone());
+    pub fn define(&mut self, name: &str, val: LispVal) -> Result<LispVal, LispErr> {
+        self.vars.insert(name.to_string(), val.clone());
         Ok(val)
     }
 
-    pub fn get(&self, name: &String) -> Option<LispVal>{
+    pub fn get(&self, name: &str) -> Option<LispVal>{
         let res = &self.vars.get(name);
         if res.is_some() {
             return res.cloned();
