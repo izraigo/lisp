@@ -117,52 +117,28 @@ fn get_var(name: String, env: Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
     }
 }
 
-// fn apply_primitive(list: &Vec<LispVal>, env: Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
-//     let mut iter = list.iter();
-//     let operator = to_wrong_expr(consume(iter.next(), "Expect operator"))?;
-//
-//     if let Atom(s) = operator {
-//         let fun = match s.as_str() {
-//             "+" => {|a, b| {Number(a + b)}},
-//             "-" => {|a, b| {Number(a - b)}},
-//             "*" => {|a, b| {Number(a * b)}},
-//             "/" => {|a, b| {Number(a / b)}},
-//             "<" => {|a, b| {Boolean(a < b)}},
-//             ">" => {|a, b| {Boolean(a > b)}},
-//             "=" => {|a, b| {Boolean(a == b)}},
-//             "!=" => {|a, b| {Boolean(a != b)}},
-//             _ => return Err(WrongExpression(format!("Invalid infix operator: {}", s))),
-//         };
-//         let left = unpack_num(eval(consume(iter.next(), "Expect argument")?, env.clone())?);
-//         let right = unpack_num(eval(consume(iter.next(), "Expect argument")?, env)?);
-//         Ok(fun(left, right))
-//     } else {
-//         Err(Runtime(format!("Operation is not recognised: {}", operator)))
-//     }
-// }
-
-fn unpack_num(lv: LispVal) -> Result<i64, LispErr> {
+fn unpack_num(lv: &LispVal) -> Result<i64, LispErr> {
     match lv {
-        LispVal::Number(n) => Ok(n),
+        LispVal::Number(n) => Ok(n.clone()),
         LispVal::String(s) => Ok(s.parse().unwrap()),
         _ => return Err(Runtime(format!("Left operand must be an integer {:?}", lv))),
     }
 }
 
-fn unpack_bool(lv: LispVal) -> Result<bool, LispErr> {
+fn unpack_bool(lv: &LispVal) -> Result<bool, LispErr> {
     match lv {
-        Boolean(b) => Ok(b),
-        LispVal::Number(n) => Ok(n != 0),
+        Boolean(b) => Ok(b.clone()),
+        LispVal::Number(n) => Ok(n.clone() != 0),
         LispVal::String(s) => Ok(s.parse().unwrap()),
         _ => return Err(Runtime(format!("Left operand must be an integer {:?}", lv))),
     }
 }
 
 
-fn unpack_str(lv: LispVal) -> Result<String, LispErr> {
+fn unpack_str(lv: &LispVal) -> Result<String, LispErr> {
     match lv {
         LispVal::Number(n) => Ok(n.to_string()),
-        LispVal::String(s) => Ok(s),
+        LispVal::String(s) => Ok(s.clone()),
         _ => return Err(Runtime(format!("Left operand must be a string {:?}", lv))),
     }
 }
@@ -264,33 +240,29 @@ pub fn create_eden_env() -> Rc<RefCell<Env>> {
     let env = Rc::from(RefCell::new(Env::new()));
     {
         let mut e = env.borrow_mut();
-        e.define("+".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Number(unpack_num(a.clone())? + unpack_num(b.clone())?)) }));
-        e.define("-".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Number(unpack_num(a.clone())? - unpack_num(b.clone())?)) }));
-        e.define("*".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Number(unpack_num(a.clone())? * unpack_num(b.clone())?)) }));
-        e.define("/".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Number(unpack_num(a.clone())? / unpack_num(b.clone())?)) }));
-        e.define("mod".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Number(unpack_num(a.clone())? % unpack_num(b.clone())?)) }));
-        e.define("quotent".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Number(unpack_num(a.clone())? / unpack_num(b.clone())?)) }));
-        e.define("remainder".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Number(unpack_num(a.clone())? + unpack_num(b.clone())?)) }));
+        e.define("+".to_string(), PrimitiveFunc(|a, b| Ok(Number(unpack_num(a)? + unpack_num(b)?))));
+        e.define("-".to_string(), PrimitiveFunc(|a, b| Ok(Number(unpack_num(a)? - unpack_num(b)?))));
+        e.define("*".to_string(), PrimitiveFunc(|a, b| Ok(Number(unpack_num(a)? * unpack_num(b)?))));
+        e.define("/".to_string(), PrimitiveFunc(|a, b| Ok(Number(unpack_num(a)? / unpack_num(b)?))));
+        e.define("mod".to_string(), PrimitiveFunc(|a, b| Ok(Number(unpack_num(a)? % unpack_num(b)?))));
+        e.define("quotent".to_string(), PrimitiveFunc(|a, b| Ok(Number(unpack_num(a)? / unpack_num(b)?))));
+        e.define("remainder".to_string(), PrimitiveFunc(|a, b| Ok(Number(unpack_num(a)? + unpack_num(b)?))));
 
-        e.define("=".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Boolean(unpack_num(a.clone())? == unpack_num(b.clone())?)) }));
-        e.define(">".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Boolean(unpack_num(a.clone())? > unpack_num(b.clone())?)) }));
-        e.define("<".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Boolean(unpack_num(a.clone())? < unpack_num(b.clone())?)) }));
-        e.define("=>".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Boolean(unpack_num(a.clone())? >= unpack_num(b.clone())?)) }));
-        e.define("<=".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Boolean(unpack_num(a.clone())? <= unpack_num(b.clone())?)) }));
+        e.define("=".to_string(), PrimitiveFunc(|a, b| Ok(Boolean(unpack_num(a)? == unpack_num(b)?))));
+        e.define(">".to_string(), PrimitiveFunc(|a, b| Ok(Boolean(unpack_num(a)? > unpack_num(b)?))));
+        e.define("<".to_string(), PrimitiveFunc(|a, b| Ok(Boolean(unpack_num(a)? < unpack_num(b)?))));
+        e.define("=>".to_string(), PrimitiveFunc(|a, b| Ok(Boolean(unpack_num(a)? >= unpack_num(b)?))));
+        e.define("<=".to_string(), PrimitiveFunc(|a, b| Ok(Boolean(unpack_num(a)? <= unpack_num(b)?))));
 
-        e.define("&&".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Boolean(unpack_bool(a.clone())? && unpack_bool(b.clone())?)) }));
-        e.define("||".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Boolean(unpack_bool(a.clone())? || unpack_bool(b.clone())?)) }));
-        e.define("/=".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Boolean(unpack_bool(a.clone())? != unpack_bool(b.clone())?)) }));
-        e.define("-".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Number(unpack_num(a.clone())? - unpack_num(b.clone())?)) }));
-        e.define("+".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Number(unpack_num(a.clone())? + unpack_num(b.clone())?)) }));
-        e.define("*".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Number(unpack_num(a.clone())? * unpack_num(b.clone())?)) }));
-        e.define("/".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Number(unpack_num(a.clone())? / unpack_num(b.clone())?)) }));
+        e.define("&&".to_string(), PrimitiveFunc(|a, b| { Ok(Boolean(unpack_bool(a)? && unpack_bool(b)?)) }));
+        e.define("||".to_string(), PrimitiveFunc(|a, b| { Ok(Boolean(unpack_bool(a)? || unpack_bool(b)?)) }));
+        e.define("/=".to_string(), PrimitiveFunc(|a, b| { Ok(Boolean(unpack_bool(a)? != unpack_bool(b)?)) }));
 
-        e.define("string=?".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Boolean(unpack_str(a.clone())? == (unpack_str(b.clone())?))) }));
-        e.define("string<?".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Boolean(unpack_str(a.clone())? < unpack_str(b.clone())?)) }));
-        e.define("string>?".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Boolean(unpack_str(a.clone())? > unpack_str(b.clone())?)) }));
-        e.define("string<=?".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Boolean(unpack_str(a.clone())? <= unpack_str(b.clone())?)) }));
-        e.define("string>=?".to_string(), PrimitiveFunc(|a, b| -> Result<LispVal, LispErr> { Ok(Boolean(unpack_str(a.clone())? >= unpack_str(b.clone())?)) }));
+        e.define("string=?".to_string(), PrimitiveFunc(|a, b| Ok(Boolean(unpack_str(a)? == (unpack_str(b)?)))));
+        e.define("string<?".to_string(), PrimitiveFunc(|a, b| Ok(Boolean(unpack_str(a)? < unpack_str(b)?))));
+        e.define("string>?".to_string(), PrimitiveFunc(|a, b| Ok(Boolean(unpack_str(a)? > unpack_str(b)?))));
+        e.define("string<=?".to_string(), PrimitiveFunc(|a, b| Ok(Boolean(unpack_str(a)? <= unpack_str(b)?))));
+        e.define("string>=?".to_string(), PrimitiveFunc(|a, b| Ok(Boolean(unpack_str(a)? >= unpack_str(b)?))));
     }
     return env;
 }
