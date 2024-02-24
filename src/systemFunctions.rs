@@ -18,15 +18,15 @@ pub fn load(file_path: &str, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr>
     };
     let mut s = String::new();
     file.read_to_string(&mut s);
+    file.try_clone();
     let expressions = match parse_expr_list(&s) {
         Ok((_, v)) => v,
         Err(err) => return Err(Runtime(err.to_string())),
     };
 
-    if expressions.len() == 0 {
-        return Ok(LispVal::List(vec![]));
+    match expressions.len() {
+        0 => return Ok(LispVal::List(vec![])),
+        1 => eval(&expressions[0], env),
+        _ => expressions[1..].iter().try_fold(eval(&expressions[0], env)?, |_, v| eval(v, env))
     }
-
-    expressions[1..].iter()
-        .try_fold(eval(&expressions[0], env)?, |_, v| eval(v, env))
 }
