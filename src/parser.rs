@@ -2,7 +2,7 @@ use nom::branch::alt;
 use nom::bytes::complete::{is_a, is_not};
 use nom::character::complete::{alpha1, alphanumeric1, char, digit1, space0, space1};
 use nom::IResult;
-use nom::multi::{many0, many1, separated_list1};
+use nom::multi::{many0, many1, separated_list0, separated_list1};
 use nom::sequence::{delimited, separated_pair};
 use crate::lispval::LispVal;
 
@@ -86,6 +86,10 @@ pub fn parse_expr(input: &str) -> IResult<&str, LispVal> {
         parse_quoted,
         try_parse_list,
     ))(input)
+}
+
+pub fn parse_expr_list(input: &str) -> IResult<&str, Vec<LispVal>> {
+    separated_list0(space1, parse_expr)(input)
 }
 
 fn dotted(input: &str) -> IResult<&str, &str> {

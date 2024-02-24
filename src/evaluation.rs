@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use crate::env::Env;
 use crate::error::LispErr;
-use crate::error::LispErr::{WrongExpression, Runtime};
+use crate::error::LispErr::{WrongExpression, Runtime, Expected};
 use crate::lispval::LispVal;
 use crate::lispval::LispVal::{Atom, Boolean, Func, Number, PrimitiveFunc};
 
@@ -17,6 +17,7 @@ pub fn eval(v: &LispVal, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
         LispVal::DottedList(_, _) => Ok(v.clone()),
         LispVal::Func { .. } => Ok(v.clone()),
         LispVal::PrimitiveFunc(_) => Ok(v.clone()),
+        //LispVal::File(_) => Ok(v.clone()),
     }
 }
 
@@ -33,8 +34,8 @@ fn eval_any_of<T>(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>, f: &[T]) -> Resul
     for e in f {
         match e(list, env) {
             Ok(val) => return Ok(val),
-            Err(LispErr::Runtime(r)) => return Err(Runtime(r)),
             Err(LispErr::WrongExpression(_)) => (),
+            Err(e) => return Err(e),
         }
     }
     Err(Runtime("Invalid expression".to_string()))
@@ -53,7 +54,7 @@ fn consume_exact(opt: Option<&LispVal>, expected: LispVal) -> Result<LispVal, Li
     if val.eq(&expected) {
         Ok(val)
     } else {
-        Err(Runtime(format!("Expected {}", expected).to_string()))
+        Err(Expected(expected))
     }
 }
 
@@ -222,7 +223,7 @@ fn evaluate_if(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> Result<LispVal, L
 fn to_wrong_expr(r: Result<LispVal, LispErr>) -> Result<LispVal, LispErr> {
     match r {
         Ok(_) => r,
-        Err(Runtime(r)) => Err(WrongExpression(r)),
+        Err(e) => Err(WrongExpression(e.to_string())),
         _ => r,
     }
 }
@@ -254,3 +255,4 @@ pub fn create_eden_env() -> Rc<RefCell<Env>> {
     }
     return env;
 }
+

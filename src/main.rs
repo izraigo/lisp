@@ -3,16 +3,19 @@ use std::io::{stdin, Write};
 
 use evaluation::eval;
 use parser::parse_expr;
+use systemFunctions::load;
 
 mod evaluation;
 mod parser;
 mod env;
 mod lispval;
 mod error;
+mod systemFunctions;
 
 fn main() {
     println!("Lisp in rust!");
     let env = create_eden_env();
+    load("/Users/izraigo/Projects/lisp/src/stdLib.scm", &env).expect("Error");
     loop {
         let mut s = String::new();
         print!("lisp>>> ");
