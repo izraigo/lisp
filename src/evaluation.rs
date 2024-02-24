@@ -22,7 +22,7 @@ pub fn eval(v: &LispVal, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
 }
 
 fn eval_list(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
-    let a = [evaluate_if, define_var, define_func, eval_primitive_function_call, set_var, eval_lambda, eval_function_call];
+    let a = [evaluate_if, define_var, define_vararg_func, define_func, eval_primitive_function_call, set_var, eval_lambda, eval_function_call];
     match eval_any_of(list, env, &a) {
         Ok(r) => Ok(r),
         Err(e) => Err(e),
@@ -65,6 +65,14 @@ fn consume_list(opt: Option<&LispVal>) -> Result<Vec<LispVal>, LispErr> {
         _ => Err(Runtime("Expected list".to_string())),
     }
 }
+
+fn consume_dotted_list(opt: Option<&LispVal>) -> Result<(Vec<LispVal>, Box<LispVal>), LispErr> {
+    match consume(opt, format!("Expected dotted list").as_str())? {
+        LispVal::DottedList(v, r) => Ok((v, r)),
+        _ => Err(WrongExpression("Expected list".to_string())),
+    }
+}
+
 
 fn nothing_to_consume(opt: Option<&LispVal>) -> Result<(), LispErr> {
     match opt {
@@ -135,6 +143,22 @@ fn unpack_str(lv: &LispVal) -> Result<String, LispErr> {
     }
 }
 
+fn define_vararg_func(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
+    let mut iter = list.iter();
+    to_wrong_expr(consume_exact(iter.next(), Atom("define".to_string())))?;
+    let (definition, vararg) =  consume_dotted_list(iter.next())?;
+    let name = extract_str_from_atom(consume(definition.first(), "Expect function name"))?;
+    let params: &Vec<String> = &definition[1..].iter().map(|a| format!("{}", a)).collect();
+
+    let mut body: Vec<LispVal> = Vec::new();
+    for v in iter {
+        body.push(v.clone());
+    }
+    let vararg = vararg.to_string();
+    let func = Func { args: params.clone(), body: body, vararg: Some(vararg), closure: env.clone() };
+    env.borrow_mut().define(&name, func.clone())
+}
+
 fn define_func(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
     let mut iter = list.iter();
     to_wrong_expr(consume_exact(iter.next(), Atom("define".to_string())))?;
@@ -179,21 +203,27 @@ fn eval_primitive_function_call(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> 
 
 fn eval_function_call(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
     let a = consume(list.first(), "Expect condition ").map(|a| eval(&a, env))?;
-
-    let Ok(Func { args, body, vararg: _vararg, closure }) = a
+    let Ok(Func { args, body, vararg: vararg, closure }) = a
         else {
             return Err(Runtime(format!("Incorrect function call")));
         };
-    let args = args.clone();
-
-    if list.len() - 1 != args.len() {
-        return Err(Runtime("Incorrect argument list".to_string()));
+    let list = &list[1..];
+    if (vararg.is_none() && list.len() != args.len()) || list.len() < args.len() {
+        return Err(Runtime("Incorrect argument count".to_string()));
     }
 
     let closure = Rc::new(RefCell::new(Env::child(closure)));
+
     for (i, arg) in args.iter().enumerate() {
-        let arg_val = eval(&list[i + 1], env)?;
-        _ = closure.borrow_mut().define(arg, arg_val);
+        _ = closure.borrow_mut().define(arg, eval(&list[i], env)?);
+    }
+
+    if  let Some(vararg_name) = vararg {
+        let mut var_arg_value = vec![];
+        for i in args.len()..list.len() {
+            var_arg_value.push(eval(&list[i], env)?);
+        }
+        closure.borrow_mut().define(&vararg_name, LispVal::List(var_arg_value));
     }
 
     let mut result = Err(Runtime("not executed".to_string()));
