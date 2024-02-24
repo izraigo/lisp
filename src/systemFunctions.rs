@@ -7,7 +7,7 @@ use crate::error::LispErr;
 use crate::error::LispErr::Runtime;
 use crate::evaluation::eval;
 use crate::lispval::LispVal;
-use crate::parser::parse_expr_list;
+use crate::parser::parse_vector;
 use std::string::String;
 use crate::env::Env;
 
@@ -18,11 +18,12 @@ pub fn load(file_path: &str, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr>
     };
     let mut s = String::new();
     file.read_to_string(&mut s);
-    file.try_clone();
-    let expressions = match parse_expr_list(&s) {
+    let expressions = match parse_vector(&s) {
         Ok((_, v)) => v,
         Err(err) => return Err(Runtime(err.to_string())),
     };
+
+    expressions.iter().for_each(|e| println!("{}", e));
 
     match expressions.len() {
         0 => return Ok(LispVal::List(vec![])),

@@ -1,10 +1,11 @@
 use nom::branch::alt;
 use nom::bytes::complete::{is_a, is_not};
-use nom::character::complete::{alpha1, alphanumeric1, char, digit1, space0, space1};
+use nom::character::complete::{alpha1, alphanumeric1, char, digit1, space0, space1, multispace1};
 use nom::IResult;
 use nom::multi::{many0, many1, separated_list0, separated_list1};
 use nom::sequence::{delimited, separated_pair};
 use crate::lispval::LispVal;
+use crate::lispval::LispVal::List;
 
 
 fn parse_string(input: &str) -> IResult<&str, LispVal> {
@@ -64,8 +65,8 @@ fn atom_parser_test() {
     assert_eq!(parse_atom("#f").unwrap(), ("", LispVal::Boolean(false)));
 }
 
-fn parse_list(input: &str) -> IResult<&str, LispVal> {
-    separated_list1(space1, parse_expr)(input).map(|(i, v)| (i, LispVal::List(v)))
+pub fn parse_vector(input: &str) -> IResult<&str, Vec<LispVal>> {
+    separated_list0(multispace1, parse_expr)(input)
 }
 
 fn parse_quoted(input: &str) -> IResult<&str, LispVal> {
@@ -84,12 +85,9 @@ pub fn parse_expr(input: &str) -> IResult<&str, LispVal> {
         parse_number,
         parse_string,
         parse_quoted,
-        try_parse_list,
+        parse_dotted_list,
+        parse_list,
     ))(input)
-}
-
-pub fn parse_expr_list(input: &str) -> IResult<&str, Vec<LispVal>> {
-    separated_list0(space1, parse_expr)(input)
 }
 
 fn dotted(input: &str) -> IResult<&str, &str> {
@@ -100,20 +98,17 @@ fn dotted(input: &str) -> IResult<&str, &str> {
 }
 
 fn parse_dotted_list(input: &str) -> IResult<&str, LispVal> {
-    separated_pair(parse_list, dotted, parse_expr)(input).map(|(i, (head, rest))| {
-        let list = match head {
-            LispVal::List(v) => v,
-            _ => panic!("List parser returned a non-list value"),
-        };
-        (i, LispVal::DottedList(list, Box::new(rest)))
-    })
+    let (input, _) = char('(')(input)?;
+    let (input, (head, rest)) = separated_pair(parse_vector, dotted, parse_expr)(input)?;
+    let (input, _) = char(')')(input)?;
+    Ok((input, LispVal::DottedList(head, Box::new(rest))))
 }
 
-fn try_parse_list(input: &str) -> IResult<&str, LispVal> {
+fn parse_list(input: &str) -> IResult<&str, LispVal> {
     let (input, _) = char('(')(input)?;
-    let (input, items) = alt((parse_dotted_list, parse_list))(input)?;
+    let (input, items) = parse_vector(input)?;
     let (input, _) = char(')')(input)?;
-    Ok((input, items))
+    Ok((input, List(items)))
 }
 
 #[test]
