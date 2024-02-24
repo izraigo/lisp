@@ -1,10 +1,11 @@
 use std::cell::RefCell;
+use std::ops::{Deref};
 use std::rc::Rc;
 use crate::env::Env;
 use crate::error::LispErr;
 use crate::error::LispErr::{WrongExpression, Runtime, Expected};
 use crate::lispval::LispVal;
-use crate::lispval::LispVal::{Atom, Boolean, Func, Number, PrimitiveFunc};
+use crate::lispval::LispVal::{Atom, Boolean, DottedList, Func, Number, PrimitiveFunc};
 
 pub fn eval(v: &LispVal, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
     match v {
@@ -188,17 +189,14 @@ fn eval_lambda(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> Result<LispVal, L
 
 fn eval_primitive_function_call(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
     let a = to_wrong_expr(consume(list.first(), "Expect primitive function ").map(|a| eval(&a, env))?);
-
     let Ok(PrimitiveFunc(f)) = a
         else {
             return Err(WrongExpression(format!("Not a primitive function call")));
         };
 
-    if list.len() < 3 {
-        return Err(Runtime("Not enough arguments".to_string()))
-    }
-
-    list[2..].iter().try_fold(eval(&list[1], env)?, |acc, xs| f(&acc, &eval(xs, env)?))
+    let list = &list[1..];
+    let params: Result<Vec<_>, _> = list.into_iter().map(|v| eval(v, env)).collect();
+    f(&params?)
 }
 
 fn eval_function_call(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
@@ -258,30 +256,91 @@ fn to_wrong_expr(r: Result<LispVal, LispErr>) -> Result<LispVal, LispErr> {
     }
 }
 
+fn car(a: &Vec<LispVal>) -> Result<LispVal, LispErr> {
+    if (a.len() > 1) {
+        return Err(Runtime("Expected one argument".to_string()));
+    }
+    match &a[0] {
+       LispVal::List(v) => Ok(v[0].clone()),
+       LispVal::DottedList(v, r) => Ok(v[0].clone()),
+       _ => Err(Runtime("Expected list".to_string()))
+    }
+}
+
+fn cdr(a: &Vec<LispVal>) -> Result<LispVal, LispErr> {
+    if (a.len() > 1) {
+        return Err(Runtime("Expected one argument".to_string()));
+    }
+    match &a[0] {
+        LispVal::List(v) => {atleast(v, 1)?; Ok(LispVal::List(v[1..].to_vec()))},
+        LispVal::DottedList(v, r) => {
+            if v.len() == 1 {
+                Ok(r.deref().clone())
+            } else {
+                Ok(DottedList(v[1..].to_vec(), r.clone()))
+            }
+        },
+        _ => Err(Runtime("Expected list".to_string()))
+    }
+}
+
+fn atleast(v: &Vec<LispVal>, i: usize) -> Result<(), LispErr> {
+    if v.len() < i {
+        return Err(Runtime(format!("Expected at least {}", i).to_string()));
+    }
+    Ok(())
+}
+
+fn eqv(a: &Vec<LispVal>) -> Result<LispVal, LispErr> {
+    match (&a[0], &a[1]) {
+        (Boolean(a), Boolean(b)) => Ok(Boolean(a == b)),
+        (Number(a), Number(b)) => Ok(Boolean(a == b)),
+        (LispVal::String(a), LispVal::String(b)) => Ok(Boolean(a.eq(b))),
+        (Atom(a), Atom(b)) => Ok(Boolean(a.eq(b))),
+        (DottedList(ax, ar), DottedList(bx, br)) => {
+            // eqv(&[ar.deref().clone(), br.deref().clone()].to_vec())?
+            // if (ax.eq(&bx))
+            Ok(Boolean(a[0].eq(&a[1])))
+        }
+        (a, b) => Ok(Boolean(a.eq(b)))
+    }
+}
+fn equal(a: &Vec<LispVal>) -> Result<LispVal, LispErr> {
+    Ok(Boolean(a[0].to_string().eq(&a[1].to_string())))
+}
+
 pub fn create_eden_env() -> Rc<RefCell<Env>> {
     let env = Rc::from(RefCell::new(Env::new()));
     {
         let mut e = env.borrow_mut();
-        e.define("+", PrimitiveFunc(|a, b| Ok(Number(unpack_num(a)? + unpack_num(b)?)))).unwrap();
-        e.define("-", PrimitiveFunc(|a, b| Ok(Number(unpack_num(a)? - unpack_num(b)?)))).unwrap();
-        e.define("*", PrimitiveFunc(|a, b| Ok(Number(unpack_num(a)? * unpack_num(b)?)))).unwrap();
-        e.define("/", PrimitiveFunc(|a, b| Ok(Number(unpack_num(a)? / unpack_num(b)?)))).unwrap();
-        e.define("mod", PrimitiveFunc(|a, b| Ok(Number(unpack_num(a)? % unpack_num(b)?)))).unwrap();
-        e.define("quotent", PrimitiveFunc(|a, b| Ok(Number(unpack_num(a)? / unpack_num(b)?)))).unwrap();
-        e.define("remainder", PrimitiveFunc(|a, b| Ok(Number(unpack_num(a)? + unpack_num(b)?)))).unwrap();
-        e.define("=", PrimitiveFunc(|a, b| Ok(Boolean(unpack_num(a)? == unpack_num(b)?)))).unwrap();
-        e.define(">", PrimitiveFunc(|a, b| Ok(Boolean(unpack_num(a)? > unpack_num(b)?)))).unwrap();
-        e.define("<", PrimitiveFunc(|a, b| Ok(Boolean(unpack_num(a)? < unpack_num(b)?)))).unwrap();
-        e.define("=>", PrimitiveFunc(|a, b| Ok(Boolean(unpack_num(a)? >= unpack_num(b)?)))).unwrap();
-        e.define("<=", PrimitiveFunc(|a, b| Ok(Boolean(unpack_num(a)? <= unpack_num(b)?)))).unwrap();
-        e.define("&&", PrimitiveFunc(|a, b| Ok(Boolean(unpack_bool(a)? && unpack_bool(b)?)))).unwrap();
-        e.define("||", PrimitiveFunc(|a, b| Ok(Boolean(unpack_bool(a)? || unpack_bool(b)?)))).unwrap();
-        e.define("/=", PrimitiveFunc(|a, b| Ok(Boolean(unpack_bool(a)? != unpack_bool(b)?)))).unwrap();
-        e.define("string=?", PrimitiveFunc(|a, b| Ok(Boolean(unpack_str(a)? == (unpack_str(b)?))))).unwrap();
-        e.define("string<?", PrimitiveFunc(|a, b| Ok(Boolean(unpack_str(a)? < unpack_str(b)?)))).unwrap();
-        e.define("string>?", PrimitiveFunc(|a, b| Ok(Boolean(unpack_str(a)? > unpack_str(b)?)))).unwrap();
-        e.define("string<=?", PrimitiveFunc(|a, b| Ok(Boolean(unpack_str(a)? <= unpack_str(b)?)))).unwrap();
-        e.define("string>=?", PrimitiveFunc(|a, b| Ok(Boolean(unpack_str(a)? >= unpack_str(b)?)))).unwrap();
+        e.define("+", PrimitiveFunc(|a| {;Ok(Number(unpack_num(&a[0])? + unpack_num(&a[1])?))})).unwrap();
+        e.define("-", PrimitiveFunc(|a| Ok(Number(unpack_num(&a[0])? - unpack_num(&a[1])?)))).unwrap();
+        e.define("*", PrimitiveFunc(|a| Ok(Number(unpack_num(&a[0])? * unpack_num(&a[1])?)))).unwrap();
+        e.define("/", PrimitiveFunc(|a| Ok(Number(unpack_num(&a[0])? / unpack_num(&a[1])?)))).unwrap();
+        e.define("mod", PrimitiveFunc(|a| Ok(Number(unpack_num(&a[0])? % unpack_num(&a[1])?)))).unwrap();
+        e.define("quotent", PrimitiveFunc(|a| Ok(Number(unpack_num(&a[0])? / unpack_num(&a[1])?)))).unwrap();
+        e.define("remainder", PrimitiveFunc(|a| Ok(Number(unpack_num(&a[0])? + unpack_num(&a[1])?)))).unwrap();
+        e.define("=", PrimitiveFunc(|a| Ok(Boolean(unpack_num(&a[0])? == unpack_num(&a[1])?)))).unwrap();
+        e.define(">", PrimitiveFunc(|a| Ok(Boolean(unpack_num(&a[0])? > unpack_num(&a[1])?)))).unwrap();
+        e.define("<", PrimitiveFunc(|a| Ok(Boolean(unpack_num(&a[0])? < unpack_num(&a[1])?)))).unwrap();
+        e.define("=>", PrimitiveFunc(|a| Ok(Boolean(unpack_num(&a[0])? >= unpack_num(&a[1])?)))).unwrap();
+        e.define("<=", PrimitiveFunc(|a| Ok(Boolean(unpack_num(&a[0])? <= unpack_num(&a[1])?)))).unwrap();
+        e.define("&&", PrimitiveFunc(|a| Ok(Boolean(unpack_bool(&a[0])? && unpack_bool(&a[1])?)))).unwrap();
+        e.define("||", PrimitiveFunc(|a| Ok(Boolean(unpack_bool(&a[0])? || unpack_bool(&a[1])?)))).unwrap();
+        e.define("/=", PrimitiveFunc(|a| Ok(Boolean(unpack_bool(&a[0])? != unpack_bool(&a[1])?)))).unwrap();
+        e.define("string=?", PrimitiveFunc(|a| Ok(Boolean(unpack_str(&a[0])? == (unpack_str(&a[1])?))))).unwrap();
+        e.define("string<?", PrimitiveFunc(|a| Ok(Boolean(unpack_str(&a[0])? < unpack_str(&a[1])?)))).unwrap();
+        e.define("string>?", PrimitiveFunc(|a| Ok(Boolean(unpack_str(&a[0])? > unpack_str(&a[1])?)))).unwrap();
+        e.define("string<=?", PrimitiveFunc(|a| Ok(Boolean(unpack_str(&a[0])? <= unpack_str(&a[1])?)))).unwrap();
+        e.define("string>=?", PrimitiveFunc(|a| Ok(Boolean(unpack_str(&a[0])? >= unpack_str(&a[1])?)))).unwrap();
+        e.define("car", PrimitiveFunc(car)).unwrap();
+        e.define("cdr", PrimitiveFunc(cdr)).unwrap();
+        // ("cons", cons),
+        // ("eq?", eqv),
+        e.define("eqv?", PrimitiveFunc(eqv)).unwrap();
+        e.define("equal?", PrimitiveFunc(equal)).unwrap();
+
+
     }
     return env;
 }

@@ -19,7 +19,7 @@ pub enum LispVal {
         body: Vec<LispVal>,
         closure: Rc<RefCell<Env>>,
     },
-    PrimitiveFunc(fn(&LispVal, &LispVal) -> Result<LispVal, LispErr>)
+    PrimitiveFunc(fn(&Vec<LispVal>) -> Result<LispVal, LispErr>)
 }
 
 impl Display for LispVal {
