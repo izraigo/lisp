@@ -1,27 +1,32 @@
-use crate::evaluation::create_eden_env;
 use std::io::{stdin, Write};
 
 use evaluation::eval;
 use parser::parse_expr;
-use systemFunctions::load;
+use primitive_functions::load;
+
+use crate::evaluation::create_eden_env;
+use crate::lispval::LispVal::LispString;
 
 mod evaluation;
 mod parser;
 mod env;
 mod lispval;
 mod error;
-mod systemFunctions;
+mod primitive_functions;
 
 fn main() {
     println!("Lisp in rust!");
     let env = create_eden_env();
-    load("/Users/izraigo/Projects/lisp/src/stdLib.scm", &env).expect("Error");
+    load(&[LispString("/Users/izraigo/Projects/lisp/src/stdLib.scm".to_string())], &env).expect("Error");
+
     loop {
         let mut s = String::new();
         print!("lisp>>> ");
         std::io::stdout().flush().unwrap();
         stdin().read_line(&mut s).expect("Enter expression");
-
+        if s.trim_end() == "quit" {
+            break
+        }
         match parse_expr(&s) {
             Ok((_, lisp_val)) => match eval(&lisp_val, &env) {
                 Ok(res) => println!("{}", res),

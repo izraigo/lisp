@@ -1,23 +1,22 @@
 use nom::branch::alt;
 use nom::bytes::complete::{is_a, is_not};
-use nom::character::complete::{alpha1, alphanumeric1, char, digit1, space0, space1, multispace1};
+use nom::character::complete::{alpha1, alphanumeric1, char, digit1, multispace1, space0};
 use nom::IResult;
-use nom::multi::{many0, many1, separated_list0, separated_list1};
+use nom::multi::{many0, many1, separated_list0};
 use nom::sequence::{delimited, separated_pair};
+
 use crate::lispval::LispVal;
 use crate::lispval::LispVal::List;
 
-
 fn parse_string(input: &str) -> IResult<&str, LispVal> {
     delimited(char('"'), is_not("\""), char('"'))(input)
-        .map(|(i, o)| (i, LispVal::String(String::from(o))))
-    //Ok((input, String::new()))
+        .map(|(i, o)| (i, LispVal::LispString(String::from(o))))
 }
 
 #[test]
 fn string_parser_test() {
     let output = parse_string("\"hello\"").unwrap();
-    assert_eq!(output, ("", LispVal::String("hello".to_owned())));
+    assert_eq!(output, ("", LispVal::LispString("hello".to_owned())));
 }
 
 fn parse_number(input: &str) -> IResult<&str, LispVal> {
@@ -74,11 +73,6 @@ fn parse_quoted(input: &str) -> IResult<&str, LispVal> {
     parse_expr(input).map(|(i, l)| (i, LispVal::Quote(Box::new(l))))
 }
 
-fn parse_quoted2(input: &str) -> IResult<&str, LispVal> {
-    let (input, _) = char('\'')(input)?;
-    parse_expr(input).map(|(i, l)| (i, LispVal::List(vec![LispVal::Atom("quote".to_owned()), l])))
-}
-
 pub fn parse_expr(input: &str) -> IResult<&str, LispVal> {
     alt((
         parse_atom,
@@ -129,7 +123,7 @@ fn list_parser_test() {
         (
             "",
             LispVal::List(vec!(
-                LispVal::String("foo".to_owned()),
+                LispVal::LispString("foo".to_owned()),
                 LispVal::Number(42),
                 LispVal::Number(53)
             ))

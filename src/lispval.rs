@@ -8,7 +8,7 @@ use crate::error::LispErr;
 pub enum LispVal {
     Atom(String),
     Number(i64),
-    String(String),
+    LispString(String),
     Boolean(bool),
     List(Vec<LispVal>),
     DottedList(Vec<LispVal>, Box<LispVal>),
@@ -19,7 +19,7 @@ pub enum LispVal {
         body: Vec<LispVal>,
         closure: Rc<RefCell<Env>>,
     },
-    PrimitiveFunc(fn(&[LispVal]) -> Result<LispVal, LispErr>)
+    PrimitiveFunc(fn(&[LispVal], &Rc<RefCell<Env>>) -> Result<LispVal, LispErr>)
 }
 
 impl Display for LispVal {
@@ -27,7 +27,7 @@ impl Display for LispVal {
         match &self {
             LispVal::Atom(s) => write!(f, "{}", s),
             LispVal::Number(n) => write!(f, "{}", n),
-            LispVal::String(s) => write!(f, "\"{}\"", s),
+            LispVal::LispString(s) => write!(f, "\"{}\"", s),
             LispVal::Boolean(b) => write!(f, "{}", b),
             LispVal::List(v) => {
                 let a: Vec<String> = v.into_iter().map(|i| i.to_string()).collect();
