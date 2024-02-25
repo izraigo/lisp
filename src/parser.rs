@@ -136,15 +136,3 @@ fn quoted_parser_test() {
     let output = parse_quoted("'52").unwrap();
     assert_eq!(output, ("", LispVal::Quote(Box::new(LispVal::Number(52)))));
 }
-
-#[test]
-fn quoted_parser_test2() {
-    let output = parse_quoted2("'52").unwrap();
-    assert_eq!(
-        output,
-        (
-            "",
-            LispVal::List(vec![LispVal::Atom("quote".to_owned()), LispVal::Number(52)])
-        )
-    );
-}
