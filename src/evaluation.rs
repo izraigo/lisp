@@ -5,7 +5,7 @@ use crate::env::Env;
 use crate::error::LispErr;
 use crate::error::LispErr::{WrongExpression, Runtime, Expected};
 use crate::lispval::LispVal;
-use crate::lispval::LispVal::{Atom, Boolean, DottedList, Func, Number, PrimitiveFunc};
+use crate::lispval::LispVal::{Atom, Boolean, DottedList, Func, List, Number, PrimitiveFunc};
 
 pub fn eval(v: &LispVal, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
     match v {
@@ -252,12 +252,28 @@ fn to_wrong_expr(r: Result<LispVal, LispErr>) -> Result<LispVal, LispErr> {
     match r {
         Ok(_) => r,
         Err(e) => Err(WrongExpression(e.to_string())),
-        _ => r,
+    }
+}
+fn cons(p: &Vec<LispVal>) -> Result<LispVal, LispErr> {
+    if p.len() != 2 {
+        return Err(Runtime("Expected two arguments".to_string()));
+    }
+    let a = &p[0];
+    let b = &p[1];
+    match b {
+        LispVal::List(xs) =>
+            match xs.len() {
+                0 => Ok(List(vec![a.clone()])),
+                _ => Ok(List(vec![a.clone(), b.clone()])),
+            },
+        LispVal::DottedList(_, r) => Ok(DottedList(vec![a.clone(), b.clone()], r.clone())),
+        _ => Ok(DottedList(vec![a.clone()], Box::new(b.clone())))
     }
 }
 
+
 fn car(a: &Vec<LispVal>) -> Result<LispVal, LispErr> {
-    if (a.len() > 1) {
+    if (a.len() != 1) {
         return Err(Runtime("Expected one argument".to_string()));
     }
     match &a[0] {
@@ -313,8 +329,8 @@ pub fn create_eden_env() -> Rc<RefCell<Env>> {
     let env = Rc::from(RefCell::new(Env::new()));
     {
         let mut e = env.borrow_mut();
-        e.define("+", PrimitiveFunc(|a| {;Ok(Number(unpack_num(&a[0])? + unpack_num(&a[1])?))})).unwrap();
-        e.define("-", PrimitiveFunc(|a| Ok(Number(unpack_num(&a[0])? - unpack_num(&a[1])?)))).unwrap();
+        e.define("+",        PrimitiveFunc(|a| {;Ok(Number(unpack_num(&a[0])? + unpack_num(&a[1])?))})).unwrap();
+        e.define("-",        PrimitiveFunc(|a| Ok(Number(unpack_num(&a[0])? - unpack_num(&a[1])?)))).unwrap();
         e.define("*", PrimitiveFunc(|a| Ok(Number(unpack_num(&a[0])? * unpack_num(&a[1])?)))).unwrap();
         e.define("/", PrimitiveFunc(|a| Ok(Number(unpack_num(&a[0])? / unpack_num(&a[1])?)))).unwrap();
         e.define("mod", PrimitiveFunc(|a| Ok(Number(unpack_num(&a[0])? % unpack_num(&a[1])?)))).unwrap();
@@ -335,10 +351,12 @@ pub fn create_eden_env() -> Rc<RefCell<Env>> {
         e.define("string>=?", PrimitiveFunc(|a| Ok(Boolean(unpack_str(&a[0])? >= unpack_str(&a[1])?)))).unwrap();
         e.define("car", PrimitiveFunc(car)).unwrap();
         e.define("cdr", PrimitiveFunc(cdr)).unwrap();
+        e.define("cons", PrimitiveFunc(cons)).unwrap();
         // ("cons", cons),
         // ("eq?", eqv),
         e.define("eqv?", PrimitiveFunc(eqv)).unwrap();
         e.define("equal?", PrimitiveFunc(equal)).unwrap();
+       // e.define("apply", PrimitiveFunc(apply)).unwrap();
 
 
     }
