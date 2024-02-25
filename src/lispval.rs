@@ -3,6 +3,8 @@ use std::rc::Rc;
 use std::fmt::Display;
 use crate::env::Env;
 use crate::error::LispErr;
+use crate::error::LispErr::Runtime;
+use crate::lispval::LispVal::Boolean;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum LispVal {
@@ -43,6 +45,33 @@ impl Display for LispVal {
                 write!(f, "lambda {} {}", args.join(" "), body.join(" "))
             },
             LispVal::PrimitiveFunc(_) => write!(f, "primitiveFunc"),
+        }
+    }
+}
+
+impl LispVal {
+    pub fn num(&self) -> Result<i64, LispErr> {
+        match self {
+            LispVal::Number(n) => Ok(n.clone()),
+            LispVal::LispString(s) => Ok(s.parse().unwrap()),
+            _ => return Err(Runtime(format!("Left operand must be an integer {:?}", self))),
+        }
+    }
+
+    pub fn bool(&self) -> Result<bool, LispErr> {
+        match self {
+            Boolean(b) => Ok(b.clone()),
+            LispVal::Number(n) => Ok(n.clone() != 0),
+            LispVal::LispString(s) => Ok(s.parse().unwrap()),
+            _ => return Err(Runtime(format!("Left operand must be an integer {:?}", self))),
+        }
+    }
+
+    pub fn str(&self) -> Result<String, LispErr> {
+        match self {
+            LispVal::Number(n) => Ok(n.to_string()),
+            LispVal::LispString(s) => Ok(s.clone()),
+            _ => return Err(Runtime(format!("Left operand must be a string {:?}", self))),
         }
     }
 }

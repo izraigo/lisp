@@ -123,31 +123,6 @@ fn get_var(name: &str, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
     }
 }
 
-pub fn unpack_num(lv: &LispVal) -> Result<i64, LispErr> {
-    match lv {
-        LispVal::Number(n) => Ok(n.clone()),
-        LispVal::LispString(s) => Ok(s.parse().unwrap()),
-        _ => return Err(Runtime(format!("Left operand must be an integer {:?}", lv))),
-    }
-}
-
-pub fn unpack_bool(lv: &LispVal) -> Result<bool, LispErr> {
-    match lv {
-        Boolean(b) => Ok(b.clone()),
-        LispVal::Number(n) => Ok(n.clone() != 0),
-        LispVal::LispString(s) => Ok(s.parse().unwrap()),
-        _ => return Err(Runtime(format!("Left operand must be an integer {:?}", lv))),
-    }
-}
-
-pub fn unpack_str(lv: &LispVal) -> Result<String, LispErr> {
-    match lv {
-        LispVal::Number(n) => Ok(n.to_string()),
-        LispVal::LispString(s) => Ok(s.clone()),
-        _ => return Err(Runtime(format!("Left operand must be a string {:?}", lv))),
-    }
-}
-
 fn define_vararg_func(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
     let mut iter = list.iter();
     to_wrong_expr(consume_exact(iter.next(), Atom("define".to_string())))?;
