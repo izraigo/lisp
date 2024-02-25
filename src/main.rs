@@ -4,7 +4,7 @@ use evaluation::eval;
 use parser::parse_expr;
 use primitive_functions::load;
 
-use crate::evaluation::create_eden_env;
+use crate::primitive_functions::create_eden_env;
 use crate::lispval::LispVal::LispString;
 
 mod evaluation;
