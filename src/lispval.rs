@@ -19,7 +19,7 @@ pub enum LispVal {
         body: Vec<LispVal>,
         closure: Rc<RefCell<Env>>,
     },
-    PrimitiveFunc(fn(&Vec<LispVal>) -> Result<LispVal, LispErr>)
+    PrimitiveFunc(fn(&[LispVal]) -> Result<LispVal, LispErr>)
 }
 
 impl Display for LispVal {
@@ -35,7 +35,7 @@ impl Display for LispVal {
             }
             LispVal::DottedList(v, v1) => {
                 let a: Vec<String> = v.into_iter().map(|i| i.to_string()).collect();
-                write!(f, "{} . {}", a.join(" "), v1.to_string())
+                write!(f, "({} . {})", a.join(" "), v1.to_string())
             }
             LispVal::Quote(q) => write!(f, "quote {}", q),
             LispVal::Func {args, body, .. } => {

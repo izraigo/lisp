@@ -23,7 +23,13 @@ pub fn eval(v: &LispVal, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
 }
 
 fn eval_list(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
-    let a = [evaluate_if, define_var, define_vararg_func, define_func, eval_primitive_function_call, set_var, eval_lambda, eval_function_call];
+    let a = [evaluate_if,
+        define_var,
+        define_vararg_func,
+        define_func,
+        set_var,
+        eval_lambda,
+        eval_function_call];
     match eval_any_of(list, env, &a) {
         Ok(r) => Ok(r),
         Err(e) => Err(e),
@@ -186,40 +192,52 @@ fn eval_lambda(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> Result<LispVal, L
     }
     Ok(Func { args: params.clone(), body: body, vararg: None, closure: env.clone()})
 }
-
-fn eval_primitive_function_call(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
-    let a = to_wrong_expr(consume(list.first(), "Expect primitive function ").map(|a| eval(&a, env))?);
-    let Ok(PrimitiveFunc(f)) = a
-        else {
-            return Err(WrongExpression(format!("Not a primitive function call")));
-        };
-
-    let list = &list[1..];
-    let params: Result<Vec<_>, _> = list.into_iter().map(|v| eval(v, env)).collect();
-    f(&params?)
+fn eval_function_call(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
+    if list.len() < 1 {
+        return Err(Runtime("Expected function".to_string()));
+    }
+    let list:Result<Vec<LispVal>, LispErr> = list.iter().map(|v|eval(v, &env)).collect();
+    let list = list?;
+    call_function(&list[0], &list[1..])
 }
 
-fn eval_function_call(list: &Vec<LispVal>, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr> {
-    let a = consume(list.first(), "Expect condition ").map(|a| eval(&a, env))?;
-    let Ok(Func { args, body, vararg: vararg, closure }) = a
+fn apply(a: &[LispVal]) -> Result<LispVal, LispErr> {
+    let f = &a[0];
+    if let List(args) = &a[1] {
+        call_function(f, args)
+    } else {
+        Err(Runtime("Expected list of arguments".to_string()))
+    }
+}
+
+fn call_function(f: &LispVal, list: &[LispVal]) -> Result<LispVal, LispErr> {
+    if list.len() < 1 {
+        return Err(Runtime("Expected function".to_string()));
+    }
+
+    if let PrimitiveFunc(func) = f {
+        return func(&list)
+    }
+
+    let Func { args, body, vararg: vararg, closure } = f
         else {
-            return Err(Runtime(format!("Incorrect function call")));
+            return Err(Runtime(format!("Incorrect function call {}", f)));
         };
-    let list = &list[1..];
+
     if (vararg.is_none() && list.len() != args.len()) || list.len() < args.len() {
         return Err(Runtime("Incorrect argument count".to_string()));
     }
 
-    let closure = Rc::new(RefCell::new(Env::child(closure)));
+    let closure = Rc::new(RefCell::new(Env::child(closure.clone())));
 
     for (i, arg) in args.iter().enumerate() {
-        _ = closure.borrow_mut().define(arg, eval(&list[i], env)?);
+        _ = closure.borrow_mut().define(arg, list[i].clone());
     }
 
     if  let Some(vararg_name) = vararg {
         let mut var_arg_value = vec![];
         for i in args.len()..list.len() {
-            var_arg_value.push(eval(&list[i], env)?);
+            var_arg_value.push(list[i].clone());
         }
         closure.borrow_mut().define(&vararg_name, LispVal::List(var_arg_value));
     }
@@ -254,7 +272,7 @@ fn to_wrong_expr(r: Result<LispVal, LispErr>) -> Result<LispVal, LispErr> {
         Err(e) => Err(WrongExpression(e.to_string())),
     }
 }
-fn cons(p: &Vec<LispVal>) -> Result<LispVal, LispErr> {
+fn cons(p: &[LispVal]) -> Result<LispVal, LispErr> {
     if p.len() != 2 {
         return Err(Runtime("Expected two arguments".to_string()));
     }
@@ -264,15 +282,23 @@ fn cons(p: &Vec<LispVal>) -> Result<LispVal, LispErr> {
         LispVal::List(xs) =>
             match xs.len() {
                 0 => Ok(List(vec![a.clone()])),
-                _ => Ok(List(vec![a.clone(), b.clone()])),
+                _ => {
+                    let mut list = xs.clone();
+                    list.insert(0, a.clone());
+                    Ok(List(list))
+                },
             },
-        LispVal::DottedList(_, r) => Ok(DottedList(vec![a.clone(), b.clone()], r.clone())),
+        LispVal::DottedList(xs, r) => {
+            let mut list = xs.clone();
+            list.insert(0, a.clone());
+            Ok(DottedList(list, r.clone()))
+        },
         _ => Ok(DottedList(vec![a.clone()], Box::new(b.clone())))
     }
 }
 
 
-fn car(a: &Vec<LispVal>) -> Result<LispVal, LispErr> {
+fn car(a: &[LispVal]) -> Result<LispVal, LispErr> {
     if (a.len() != 1) {
         return Err(Runtime("Expected one argument".to_string()));
     }
@@ -283,7 +309,7 @@ fn car(a: &Vec<LispVal>) -> Result<LispVal, LispErr> {
     }
 }
 
-fn cdr(a: &Vec<LispVal>) -> Result<LispVal, LispErr> {
+fn cdr(a: &[LispVal]) -> Result<LispVal, LispErr> {
     if (a.len() > 1) {
         return Err(Runtime("Expected one argument".to_string()));
     }
@@ -300,14 +326,14 @@ fn cdr(a: &Vec<LispVal>) -> Result<LispVal, LispErr> {
     }
 }
 
-fn atleast(v: &Vec<LispVal>, i: usize) -> Result<(), LispErr> {
+fn atleast(v: &[LispVal], i: usize) -> Result<(), LispErr> {
     if v.len() < i {
         return Err(Runtime(format!("Expected at least {}", i).to_string()));
     }
     Ok(())
 }
 
-fn eqv(a: &Vec<LispVal>) -> Result<LispVal, LispErr> {
+fn eqv(a: &[LispVal]) -> Result<LispVal, LispErr> {
     match (&a[0], &a[1]) {
         (Boolean(a), Boolean(b)) => Ok(Boolean(a == b)),
         (Number(a), Number(b)) => Ok(Boolean(a == b)),
@@ -321,7 +347,7 @@ fn eqv(a: &Vec<LispVal>) -> Result<LispVal, LispErr> {
         (a, b) => Ok(Boolean(a.eq(b)))
     }
 }
-fn equal(a: &Vec<LispVal>) -> Result<LispVal, LispErr> {
+fn equal(a: &[LispVal]) -> Result<LispVal, LispErr> {
     Ok(Boolean(a[0].to_string().eq(&a[1].to_string())))
 }
 
@@ -352,13 +378,10 @@ pub fn create_eden_env() -> Rc<RefCell<Env>> {
         e.define("car", PrimitiveFunc(car)).unwrap();
         e.define("cdr", PrimitiveFunc(cdr)).unwrap();
         e.define("cons", PrimitiveFunc(cons)).unwrap();
-        // ("cons", cons),
         // ("eq?", eqv),
         e.define("eqv?", PrimitiveFunc(eqv)).unwrap();
         e.define("equal?", PrimitiveFunc(equal)).unwrap();
-       // e.define("apply", PrimitiveFunc(apply)).unwrap();
-
-
+        e.define("apply", PrimitiveFunc(apply)).unwrap();
     }
     return env;
 }
